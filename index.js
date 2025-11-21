@@ -579,25 +579,49 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // ✅ Verificar si este IP ya tiene usuario registrado
-    const existingUser = getUserByIP(ipHash);
     let finalUserData;
     let isNewUser = false;
 
-    if (existingUser) {
+    // 🔐 NUEVO: Si el usuario viene con ID de Discord (no es guest-XXXX), usar directamente
+    const isDiscordUser = userData.id && !userData.id.startsWith('guest-') && !userData.username.startsWith('Invitado');
+    
+    if (isDiscordUser) {
+      // Usuario de Discord - usar sus datos directamente, no buscar por IP
+      logger.user(`🔐 Usuario Discord conectando: ${userData.username} (ID: ${userData.id})`);
+      
+      const isAdmin = isAdminIP(clientIp);
+      const userRole = isAdmin ? 'admin' : 'user';
+
       finalUserData = {
-        id: existingUser.id,
-        username: existingUser.username,
-        avatar: existingUser.avatar,
-        role: existingUser.role,
+        ...userData,
+        role: userRole,
         socketId: socket.id,
         ip: clientIp,
         ipHash,
         online: true,
         connectedAt: new Date().toISOString()
       };
-      logger.user(`Usuario reconectado: ${existingUser.username}`);
+
+      // No registrar por IP, registrar por ID de Discord
+      logger.user(`Usuario Discord: ${userData.username} - ${userRole}`);
     } else {
+      // Usuario invitado - usar sistema de IP como antes
+      const existingUser = getUserByIP(ipHash);
+
+      if (existingUser) {
+        finalUserData = {
+          id: existingUser.id,
+          username: existingUser.username,
+          avatar: existingUser.avatar,
+          role: existingUser.role,
+          socketId: socket.id,
+          ip: clientIp,
+          ipHash,
+          online: true,
+          connectedAt: new Date().toISOString()
+        };
+        logger.user(`Usuario invitado reconectado: ${existingUser.username}`);
+      } else {
       // Usuario nuevo - verificar que el username no esté en uso
       const normalizedUsername = userData.username.toLowerCase().trim();
       const alreadyExists = Array.from(usedUsernames).some(
@@ -626,18 +650,23 @@ io.on("connection", (socket) => {
         connectedAt: new Date().toISOString()
       };
 
-      isNewUser = true;
-      logger.user(`Nuevo usuario: ${userData.username} - ${userRole}`);
+        isNewUser = true;
+        logger.user(`Nuevo usuario invitado: ${userData.username} - ${userRole}`);
+      }
     }
 
     usedUsernames.add(finalUserData.username);
     connectedUsers.set(socket.id, finalUserData);
-    registerUser(ipHash, {
-      id: finalUserData.id,
-      username: finalUserData.username,
-      avatar: finalUserData.avatar,
-      role: finalUserData.role
-    });
+    
+    // Solo registrar por IP si es usuario invitado (no Discord)
+    if (!isDiscordUser) {
+      registerUser(ipHash, {
+        id: finalUserData.id,
+        username: finalUserData.username,
+        avatar: finalUserData.avatar,
+        role: finalUserData.role
+      });
+    }
 
     startHeartbeat();
 
