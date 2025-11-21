@@ -12,7 +12,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Inicializar Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // ✅ Importar capa de base de datos
 const db = require('./db');
@@ -348,21 +348,17 @@ io.on("connection", (socket) => {
           avatar: BOT_USER.avatar,
           content: text,
           timestamp: new Date().toISOString(),
-          isSystem: false
+          isSystem: false,
+          role: 'bot'
         };
 
-        // Simular tiempo de escritura y luego guardar + emitir
+        // Simular tiempo de escritura (opcional, pero da realismo)
         setTimeout(async () => {
           try {
-            // ✅ Guardar primero en DB
             await db.saveMessage(botMessage);
-            // ✅ Luego emitir a los clientes
             io.to(message.channelId).emit("message:received", botMessage);
-            logger.message(`Bot respondió en ${message.channelId}`);
           } catch (err) {
             logger.error("Error guardando mensaje del bot:", err);
-            // Emitir de todos modos para que el usuario vea la respuesta
-            io.to(message.channelId).emit("message:received", botMessage);
           }
         }, 1500);
 
@@ -378,15 +374,9 @@ io.on("connection", (socket) => {
           avatar: BOT_USER.avatar,
           content: "Lo siento, mis circuitos están un poco fritos ahora mismo. Inténtalo más tarde. 🤖💥",
           timestamp: new Date().toISOString(),
-          isSystem: false
+          isSystem: false,
+          role: 'bot'
         };
-
-        // ✅ Guardar mensaje de error también
-        try {
-          await db.saveMessage(errorMessage);
-        } catch (dbErr) {
-          logger.error("Error guardando mensaje de error del bot:", dbErr);
-        }
 
         io.to(message.channelId).emit("message:received", errorMessage);
       }
