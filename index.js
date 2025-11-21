@@ -39,6 +39,13 @@ const ICONS = {
   security: '🛡️'
 };
 
+// ✅ Async Error Wrapper (OAuth2 Best Practice)
+const catchAsync = (fn) => {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+};
+
 const logger = {
   info: (message, ...args) => {
     console.log(`${COLORS.blue}${ICONS.info} [INFO]${COLORS.reset} ${message}`, ...args);
@@ -330,7 +337,7 @@ app.get("/auth/debug", (req, res) => {
 });
 
 // Ruta 1: Iniciar OAuth - Redirige al usuario a Discord
-app.get("/auth/discord", (req, res) => {
+app.get("/auth/discord", catchAsync(async (req, res) => {
   const redirectUri = process.env.DISCORD_REDIRECT_URI;
   const clientId = process.env.DISCORD_CLIENT_ID;
   const scope = "identify";
@@ -340,87 +347,120 @@ app.get("/auth/discord", (req, res) => {
     logger.error("❌ Variables de entorno faltantes!");
     logger.error(`CLIENT_ID: ${clientId ? 'OK' : 'UNDEFINED'}`);
     logger.error(`REDIRECT_URI: ${redirectUri ? 'OK' : 'UNDEFINED'}`);
-    return res.status(500).send("Error de configuración del servidor. Variables de entorno no configuradas.");
+    const error = new Error('server_error');
+    error.statusCode = 500;
+    error.description = 'Error de configuración del servidor. Variables de entorno no configuradas.';
+    throw error;
   }
   
-  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}`;
+  // Generate state parameter for CSRF protection (best practice)
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.oauthState = state;
+  
+  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}`;
   
   logger.info(`🔐 Redirecting to Discord OAuth: ${discordAuthUrl}`);
   res.redirect(discordAuthUrl);
-});
+}));
 
 // Ruta 2: Callback de Discord - Intercambia el code por el token
-app.get("/auth/callback", async (req, res) => {
-  const { code } = req.query;
+app.get("/auth/callback", catchAsync(async (req, res) => {
+  const { code, state, error } = req.query;
+  
+  // Check for OAuth errors from Discord
+  if (error) {
+    logger.error(`❌ Discord OAuth error: ${error}`);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
+    return res.redirect(`${frontendUrl}/?auth=error&error_code=${error}`);
+  }
   
   if (!code) {
     logger.error("❌ No authorization code received from Discord");
-    return res.status(400).send("Authorization failed: No code provided");
+    const authError = new Error('invalid_request');
+    authError.statusCode = 400;
+    authError.description = 'Authorization failed: No code provided';
+    throw authError;
   }
+  
+  // Validate state parameter (CSRF protection)
+  if (state !== req.session.oauthState) {
+    logger.error("❌ OAuth state mismatch - possible CSRF attack");
+    const authError = new Error('invalid_request');
+    authError.statusCode = 400;
+    authError.description = 'State parameter mismatch';
+    throw authError;
+  }
+  
+  // Clear state after validation
+  delete req.session.oauthState;
 
-  try {
-    logger.info("🔄 Exchanging authorization code for access token...");
-    
-    // Intercambiar code por access_token
-    const tokenResponse = await axios.post(
-      "https://discord.com/api/oauth2/token",
-      new URLSearchParams({
-        client_id: process.env.DISCORD_CLIENT_ID,
-        client_secret: process.env.DISCORD_CLIENT_SECRET,
-        code: code,
-        grant_type: "authorization_code",
-        redirect_uri: process.env.DISCORD_REDIRECT_URI,
-      }),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
-    );
-
-    const { access_token } = tokenResponse.data;
-    logger.success("✅ Access token obtained successfully");
-
-    // Obtener información del usuario de Discord
-    const userResponse = await axios.get("https://discord.com/api/users/@me", {
+  logger.info("🔄 Exchanging authorization code for access token...");
+  
+  // Intercambiar code por access_token
+  const tokenResponse = await axios.post(
+    "https://discord.com/api/oauth2/token",
+    new URLSearchParams({
+      client_id: process.env.DISCORD_CLIENT_ID,
+      client_secret: process.env.DISCORD_CLIENT_SECRET,
+      code: code,
+      grant_type: "authorization_code",
+      redirect_uri: process.env.DISCORD_REDIRECT_URI,
+    }),
+    {
       headers: {
-        Authorization: `Bearer ${access_token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-    });
+    }
+  );
 
-    const discordUser = userResponse.data;
-    logger.user(`👤 Discord user authenticated: ${discordUser.username}#${discordUser.discriminator} (ID: ${discordUser.id})`);
+  const { access_token, refresh_token, expires_in } = tokenResponse.data;
+  logger.success("✅ Access token obtained successfully");
 
-    // Guardar usuario en sesión
-    req.session.discordUser = {
-      id: discordUser.id,
-      username: discordUser.username,
-      discriminator: discordUser.discriminator,
-      avatar: discordUser.avatar,
-      accessToken: access_token,
-    };
+  // Obtener información del usuario de Discord
+  const userResponse = await axios.get("https://discord.com/api/users/@me", {
+    headers: {
+      Authorization: `Bearer ${access_token}`,
+    },
+  });
 
-    // Guardar la sesión antes de redirigir
+  const discordUser = userResponse.data;
+  logger.user(`👤 Discord user authenticated: ${discordUser.username}#${discordUser.discriminator} (ID: ${discordUser.id})`);
+
+  // Guardar usuario en sesión (con refresh_token para futura implementación)
+  req.session.discordUser = {
+    id: discordUser.id,
+    username: discordUser.username,
+    discriminator: discordUser.discriminator,
+    avatar: discordUser.avatar,
+    accessToken: access_token,
+    refreshToken: refresh_token, // Save for token refresh
+    tokenExpiry: Date.now() + (expires_in * 1000), // Calculate expiry timestamp
+  };
+
+  // Guardar la sesión antes de redirigir
+  await new Promise((resolve, reject) => {
     req.session.save((err) => {
       if (err) {
         logger.error("❌ Error saving session:", err);
-        return res.status(500).send("Error al guardar sesión");
+        const sessionError = new Error('server_error');
+        sessionError.statusCode = 500;
+        sessionError.description = 'Error al guardar sesión';
+        reject(sessionError);
+      } else {
+        resolve();
       }
-
-      // Redirigir al frontend con éxito
-      const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
-      const redirectUrl = `${frontendUrl}/?auth=success`;
-      
-      logger.info(`🔄 Redirecting to frontend: ${frontendUrl}`);
-      logger.success(`✅ Session saved for user: ${discordUser.username}`);
-      
-      res.redirect(redirectUrl);
     });
-  } catch (error) {
-    logger.error("❌ Discord OAuth error:", error.response?.data || error.message);
-    res.status(500).send("Authentication failed");
-  }
-});
+  });
+
+  // Redirigir al frontend con éxito
+  const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
+  const redirectUrl = `${frontendUrl}/?auth=success`;
+  
+  logger.info(`🔄 Redirecting to frontend: ${frontendUrl}`);
+  logger.success(`✅ Session saved for user: ${discordUser.username}`);
+  
+  res.redirect(redirectUrl);
+}));
 
 // Ruta 3: Obtener usuario autenticado
 app.get("/auth/user", (req, res) => {
@@ -984,6 +1024,38 @@ io.on("connection", (socket) => {
   });
 });
 
+// ✅ Global Error Handler for OAuth2 (Best Practice)
+app.use((err, req, res, next) => {
+  // Map of OAuth2 error codes to user-friendly messages
+  const errorMessages = {
+    'invalid_request': 'La solicitud de autorización no es válida',
+    'unauthorized_client': 'El cliente no está autorizado',
+    'access_denied': 'Acceso denegado por el usuario',
+    'unsupported_response_type': 'Tipo de respuesta no soportado',
+    'invalid_scope': 'Alcance no válido',
+    'server_error': 'Error del servidor',
+    'temporarily_unavailable': 'Servicio temporalmente no disponible',
+  };
+
+  const statusCode = err.statusCode || 500;
+  const errorCode = err.message || 'server_error';
+  const description = err.description || errorMessages[errorCode] || 'Error desconocido';
+
+  logger.error(`OAuth Error [${errorCode}]: ${description}`);
+
+  // Redirect to frontend with error for OAuth errors
+  if (req.path.startsWith('/auth/')) {
+    const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
+    return res.redirect(`${frontendUrl}/?auth=error&error_code=${errorCode}&error_description=${encodeURIComponent(description)}`);
+  }
+
+  // JSON response for API errors
+  res.status(statusCode).json({
+    error: errorCode,
+    error_description: description
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   logger.server(`Servidor corriendo en puerto ${PORT}`);
@@ -991,4 +1063,5 @@ server.listen(PORT, () => {
   logger.security(`Sistema de baneos activado`);
   logger.security(`Rate limiting activado (5 msg/10s)`);
   logger.info(`Heartbeat system ready`);
+  logger.security(`OAuth2 with CSRF protection (state parameter) enabled`);
 });
