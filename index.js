@@ -372,18 +372,20 @@ app.get("/auth/callback", async (req, res) => {
     const discordUser = userResponse.data;
     logger.user(`👤 Discord user authenticated: ${discordUser.username}#${discordUser.discriminator} (ID: ${discordUser.id})`);
 
-    // Guardar usuario en sesión
-    req.session.discordUser = {
+    // Crear un objeto de usuario simplificado (sin token sensible)
+    const userData = {
       id: discordUser.id,
       username: discordUser.username,
       discriminator: discordUser.discriminator,
-      avatar: discordUser.avatar,
-      accessToken: access_token,
+      avatar: discordUser.avatar
     };
 
-    // Redirigir al frontend con éxito
+    // Codificar los datos del usuario en base64 para pasarlos en la URL
+    const userDataEncoded = Buffer.from(JSON.stringify(userData)).toString('base64');
+
+    // Redirigir al frontend con los datos del usuario
     const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
-    res.redirect(`${frontendUrl}/?auth=success`);
+    res.redirect(`${frontendUrl}/?auth=success&user=${userDataEncoded}`);
   } catch (error) {
     logger.error("❌ Discord OAuth error:", error.response?.data || error.message);
     res.status(500).send("Authentication failed");
