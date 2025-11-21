@@ -8,6 +8,11 @@ const axios = require("axios");
 const session = require("express-session");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
+const { GoogleGenerativeAI } = require("@google/genai");
+
+// Inicializar Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
 // ✅ Importar capa de base de datos
 const db = require('./db');
@@ -316,6 +321,57 @@ io.on("connection", (socket) => {
 
     // Emitir a todos en el canal
     io.to(message.channelId).emit("message:received", message);
+
+    // 🤖 Lógica del Bot (Gemini)
+    if (message.content.toLowerCase().includes('@upg')) {
+      try {
+        // Prompt para el bot
+        const prompt = `Eres UPG, un asistente útil y divertido para la comunidad de gamers "United Player Group". 
+        El usuario ${message.username} dice: "${message.content}". 
+        Responde de manera concisa y amigable (máximo 200 caracteres si es posible).`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        // Crear mensaje del bot
+        const botMessage = {
+          id: crypto.randomUUID(),
+          channelId: message.channelId,
+          userId: 'bot',
+          username: 'UPG',
+          avatar: BOT_USER.avatar,
+          content: text,
+          timestamp: new Date().toISOString(),
+          isSystem: false,
+          role: 'bot'
+        };
+
+        // Simular tiempo de escritura (opcional, pero da realismo)
+        setTimeout(async () => {
+          await db.saveMessage(botMessage);
+          io.to(message.channelId).emit("message:received", botMessage);
+        }, 1500);
+
+      } catch (error) {
+        logger.error("Error con Gemini:", error);
+
+        // Mensaje de error amigable
+        const errorMessage = {
+          id: crypto.randomUUID(),
+          channelId: message.channelId,
+          userId: 'bot',
+          username: 'UPG',
+          avatar: BOT_USER.avatar,
+          content: "Lo siento, mis circuitos están un poco fritos ahora mismo. Inténtalo más tarde. 🤖💥",
+          timestamp: new Date().toISOString(),
+          isSystem: false,
+          role: 'bot'
+        };
+
+        io.to(message.channelId).emit("message:received", errorMessage);
+      }
+    }
   });
 
   // ✅ Canales de Voz
