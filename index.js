@@ -391,25 +391,31 @@ app.get("/auth/callback", async (req, res) => {
     const discordUser = userResponse.data;
     logger.user(`👤 Discord user authenticated: ${discordUser.username}#${discordUser.discriminator} (ID: ${discordUser.id})`);
 
-    // Crear un objeto de usuario simplificado (sin token sensible)
-    const userData = {
+    // Guardar usuario en sesión
+    req.session.discordUser = {
       id: discordUser.id,
       username: discordUser.username,
       discriminator: discordUser.discriminator,
-      avatar: discordUser.avatar
+      avatar: discordUser.avatar,
+      accessToken: access_token,
     };
 
-    // Codificar los datos del usuario en base64 para pasarlos en la URL
-    const userDataEncoded = Buffer.from(JSON.stringify(userData)).toString('base64');
+    // Guardar la sesión antes de redirigir
+    req.session.save((err) => {
+      if (err) {
+        logger.error("❌ Error saving session:", err);
+        return res.status(500).send("Error al guardar sesión");
+      }
 
-    // Redirigir al frontend con los datos del usuario
-    const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
-    const redirectUrl = `${frontendUrl}/?auth=success&user=${userDataEncoded}`;
-    
-    logger.info(`🔄 Redirecting to frontend: ${frontendUrl}`);
-    logger.info(`👤 User data encoded (length): ${userDataEncoded.length} chars`);
-    
-    res.redirect(redirectUrl);
+      // Redirigir al frontend con éxito
+      const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
+      const redirectUrl = `${frontendUrl}/?auth=success`;
+      
+      logger.info(`🔄 Redirecting to frontend: ${frontendUrl}`);
+      logger.success(`✅ Session saved for user: ${discordUser.username}`);
+      
+      res.redirect(redirectUrl);
+    });
   } catch (error) {
     logger.error("❌ Discord OAuth error:", error.response?.data || error.message);
     res.status(500).send("Authentication failed");
