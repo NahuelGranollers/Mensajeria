@@ -363,7 +363,8 @@ app.get("/auth/callback", async (req, res) => {
     };
 
     // Redirigir al frontend con éxito
-    res.redirect(`/?auth=success`);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
+    res.redirect(`${frontendUrl}/?auth=success`);
   } catch (error) {
     logger.error("❌ Discord OAuth error:", error.response?.data || error.message);
     res.status(500).send("Authentication failed");
