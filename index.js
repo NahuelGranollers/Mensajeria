@@ -1147,26 +1147,55 @@ io.on("connection", (socket) => {
     if (user) {
       logger.user(`Desconectado: ${user.username} (${socket.id})`);
       
-      // Actualizar lastSeen del usuario registrado
-      if (user.ipHash) {
-        const registeredUser = registeredUsers[user.ipHash];
-        if (registeredUser) {
-          registeredUser.lastSeen = new Date().toISOString();
+      // 🔐 Detectar si es usuario Discord o invitado
+      const isDiscordUser = user.id && !user.id.startsWith('guest-') && !user.username.startsWith('Invitado');
+      
+      if (isDiscordUser) {
+        // Usuario Discord - mantener en lista como offline
+        logger.user(`👤 Usuario Discord desconectado (se mantiene como offline): ${user.username}`);
+        
+        // Actualizar lastSeen del usuario registrado
+        if (user.ipHash) {
+          const registeredUser = registeredUsers[user.ipHash];
+          if (registeredUser) {
+            registeredUser.lastSeen = new Date().toISOString();
+            saveRegisteredUsers();
+          }
+        }
+        
+        // Eliminar de usuarios conectados
+        connectedUsers.delete(socket.id);
+
+        // Liberar username
+        usedUsernames.delete(user.username);
+
+        // Notificar que está offline (se mantiene en lista)
+        io.emit("user:offline", { 
+          userId: user.id, 
+          username: user.username 
+        });
+      } else {
+        // Usuario invitado - eliminar completamente
+        logger.user(`👥 Usuario invitado desconectado (eliminado): ${user.username}`);
+        
+        // Eliminar de usuarios conectados
+        connectedUsers.delete(socket.id);
+
+        // Liberar username
+        usedUsernames.delete(user.username);
+        
+        // Eliminar de usuarios registrados por IP
+        if (user.ipHash && registeredUsers[user.ipHash]) {
+          delete registeredUsers[user.ipHash];
           saveRegisteredUsers();
         }
+
+        // Notificar eliminación completa (no aparecerá en offline)
+        io.emit("user:removed", { 
+          userId: user.id, 
+          username: user.username 
+        });
       }
-      
-      // Eliminar de usuarios conectados
-      connectedUsers.delete(socket.id);
-
-      // Liberar username (ya no es necesario mantenerlo bloqueado)
-      usedUsernames.delete(user.username);
-
-      // Notificar a todos que el usuario se desconectó (pero sigue existiendo offline)
-      io.emit("user:offline", { 
-        userId: user.id, 
-        username: user.username 
-      });
 
       // Enviar lista actualizada con todos los usuarios (online + offline)
       const allUsers = getAllUsers();
