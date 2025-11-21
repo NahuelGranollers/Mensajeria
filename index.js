@@ -3,6 +3,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const app = express();
 const server = http.createServer(app);
@@ -25,6 +26,22 @@ const connectedUsers = new Map();
 
 // ✅ Set de usernames en uso (para evitar duplicados)
 const usedUsernames = new Set();
+
+
+const ADMIN_IP_HASH = '44273c5917d79833c51420afd84a77cef89743c63a44b3c07742ee59d9cde94a';
+
+// Función para hashear IP con SHA-256
+function hashIP(ip) {
+  if (!ip) return null;
+  const cleanIp = ip.replace('::ffff:', '').trim();
+  return crypto.createHash('sha256').update(cleanIp).digest('hex');
+}
+
+// Verificar si una IP es admin
+function isAdminIP(ip) {
+  const ipHash = hashIP(ip);
+  return ipHash === ADMIN_IP_HASH;
+}
 
 // ✅ Sistema de baneos
 const BANNED_FILE = path.join(__dirname, 'banned.json');
@@ -72,7 +89,8 @@ loadBannedList();
 
 io.on("connection", (socket) => {
   const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-  console.log("🔌 Usuario conectado:", socket.id, "IP:", clientIp);
+  const ipHash = hashIP(clientIp);
+  console.log("🔌 Usuario conectado:", socket.id, "IP Hash:", ipHash?.substring(0, 16) + "...");
 
   // ✅ Verificar disponibilidad de username
   socket.on("username:check", ({ username }) => {
@@ -95,7 +113,8 @@ io.on("connection", (socket) => {
   socket.on("user:join", (userData) => {
     // Verificar si está baneado
     if (isBanned(userData.id, clientIp)) {
-      console.log(`⛔ Usuario baneado intentó conectarse: ${userData.username} (${clientIp})`);
+      const ipHashShort = hashIP(clientIp)?.substring(0, 16) + "...";
+      console.log(`⛔ Usuario baneado intentó conectarse: ${userData.username} - IP Hash: ${ipHashShort}`);
       socket.emit("banned", { reason: "Tu usuario o IP ha sido baneado del servidor." });
       socket.disconnect(true);
       return;
@@ -119,18 +138,30 @@ io.on("connection", (socket) => {
     // Agregar username al set de usados
     usedUsernames.add(userData.username);
 
+    // Detectar si es admin por IP
+    const isAdmin = isAdminIP(clientIp);
+    const userRole = isAdmin ? 'admin' : 'user';
+
     // Guardar usuario con su socketId e IP
     connectedUsers.set(socket.id, {
       ...userData,
+      role: userRole,
       socketId: socket.id,
       ip: clientIp,
       connectedAt: new Date().toISOString()
     });
 
-    console.log(`👤 Usuario registrado: ${userData.username} (${socket.id})`);
+    const ipHashShort = hashIP(clientIp)?.substring(0, 16) + "...";
+    console.log(`👤 Usuario registrado: ${userData.username} (${socket.id}) - Rol: ${userRole} - IP Hash: ${ipHashShort}`);
 
-    // Enviar usuario nuevo a todos
-    io.emit("user:joined", userData);
+    // Enviar rol actualizado al usuario si es admin
+    if (isAdmin) {
+      socket.emit("role:updated", { role: 'admin' });
+      console.log(`👑 Admin detectado por IP: ${userData.username}`);
+    }
+
+    // Enviar usuario nuevo a todos con rol incluido
+    io.emit("user:joined", { ...userData, role: userRole });
 
     // Enviar lista completa de usuarios al nuevo usuario
     const usersList = Array.from(connectedUsers.values());
@@ -269,7 +300,8 @@ io.on("connection", (socket) => {
       // Notificar a todos
       io.emit("user:banned", { userId, username });
       
-      console.log(`🔨 Admin ${admin.username} baneó a ${username} (IP: ${targetIp})`);
+      const targetIpHash = hashIP(targetIp)?.substring(0, 16) + "...";
+      console.log(`🔨 Admin ${admin.username} baneó a ${username} - IP Hash: ${targetIpHash}`);
     }
   });
 
