@@ -5,6 +5,77 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+// ✅ Sistema de Logs Profesional
+const COLORS = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  dim: '\x1b[2m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m',
+  white: '\x1b[37m',
+  gray: '\x1b[90m'
+};
+
+const ICONS = {
+  info: 'ℹ️',
+  success: '✅',
+  warning: '⚠️',
+  error: '❌',
+  debug: '🔍',
+  server: '🚀',
+  socket: '🔌',
+  user: '👤',
+  message: '💬',
+  admin: '👑',
+  ban: '🔨',
+  security: '🛡️'
+};
+
+const logger = {
+  info: (message, ...args) => {
+    console.log(`${COLORS.blue}${ICONS.info} [INFO]${COLORS.reset} ${message}`, ...args);
+  },
+  success: (message, ...args) => {
+    console.log(`${COLORS.green}${ICONS.success} [SUCCESS]${COLORS.reset} ${message}`, ...args);
+  },
+  warning: (message, ...args) => {
+    console.log(`${COLORS.yellow}${ICONS.warning} [WARNING]${COLORS.reset} ${message}`, ...args);
+  },
+  error: (message, ...args) => {
+    console.error(`${COLORS.red}${ICONS.error} [ERROR]${COLORS.reset} ${message}`, ...args);
+  },
+  debug: (message, ...args) => {
+    if (process.env.DEBUG === 'true') {
+      console.log(`${COLORS.gray}${ICONS.debug} [DEBUG]${COLORS.reset} ${message}`, ...args);
+    }
+  },
+  server: (message, ...args) => {
+    console.log(`${COLORS.cyan}${ICONS.server} [SERVER]${COLORS.reset} ${message}`, ...args);
+  },
+  socket: (message, ...args) => {
+    console.log(`${COLORS.magenta}${ICONS.socket} [SOCKET]${COLORS.reset} ${message}`, ...args);
+  },
+  user: (message, ...args) => {
+    console.log(`${COLORS.green}${ICONS.user} [USER]${COLORS.reset} ${message}`, ...args);
+  },
+  message: (message, ...args) => {
+    console.log(`${COLORS.blue}${ICONS.message} [MESSAGE]${COLORS.reset} ${message}`, ...args);
+  },
+  admin: (message, ...args) => {
+    console.log(`${COLORS.yellow}${ICONS.admin} [ADMIN]${COLORS.reset} ${message}`, ...args);
+  },
+  ban: (message, ...args) => {
+    console.log(`${COLORS.red}${ICONS.ban} [BAN]${COLORS.reset} ${message}`, ...args);
+  },
+  security: (message, ...args) => {
+    console.log(`${COLORS.cyan}${ICONS.security} [SECURITY]${COLORS.reset} ${message}`, ...args);
+  }
+};
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -57,7 +128,7 @@ function loadBannedList() {
       bannedList = JSON.parse(data);
     }
   } catch (error) {
-    console.error('Error cargando lista de baneados:', error);
+    logger.error('Error cargando lista de baneados:', error);
   }
 }
 
@@ -66,7 +137,7 @@ function saveBannedList() {
   try {
     fs.writeFileSync(BANNED_FILE, JSON.stringify(bannedList, null, 2));
   } catch (error) {
-    console.error('Error guardando lista de baneados:', error);
+    logger.error('Error guardando lista de baneados:', error);
   }
 }
 
@@ -89,10 +160,62 @@ function banUser(userId, ip) {
 // Cargar baneos al iniciar
 loadBannedList();
 
+// ✅ Rate Limiting - Prevenir spam
+const rateLimits = new Map(); // socketId -> { messages: [], lastCheck: timestamp }
+
+function checkRateLimit(socketId, action = 'message') {
+  const now = Date.now();
+  const limit = action === 'message' ? 5 : 10; // 5 mensajes o 10 acciones por ventana
+  const window = 10000; // 10 segundos
+  
+  if (!rateLimits.has(socketId)) {
+    rateLimits.set(socketId, { actions: [now], lastCheck: now });
+    return true;
+  }
+  
+  const userData = rateLimits.get(socketId);
+  // Limpiar acciones antiguas fuera de la ventana
+  userData.actions = userData.actions.filter(timestamp => now - timestamp < window);
+  
+  if (userData.actions.length >= limit) {
+    return false; // Rate limit excedido
+  }
+  
+  userData.actions.push(now);
+  userData.lastCheck = now;
+  return true;
+}
+
+// Limpiar rate limits de usuarios desconectados cada 5 minutos
+setInterval(() => {
+  const now = Date.now();
+  for (const [socketId, data] of rateLimits.entries()) {
+    if (now - data.lastCheck > 300000) { // 5 minutos sin actividad
+      rateLimits.delete(socketId);
+    }
+  }
+}, 300000);
+
 io.on("connection", (socket) => {
   const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
   const ipHash = hashIP(clientIp);
-  console.log("🔌 Usuario conectado:", socket.id);
+  logger.socket(`Usuario conectado: ${socket.id}`);
+
+  // ✅ Sistema de Heartbeat - Mantener conexión activa (sin timeout/desconexión)
+  let heartbeatInterval;
+  const HEARTBEAT_INTERVAL = 10000; // Enviar ping cada 10 segundos
+
+  // Iniciar heartbeat después de que el usuario se registre
+  const startHeartbeat = () => {
+    heartbeatInterval = setInterval(() => {
+      socket.emit('heartbeat:ping');
+    }, HEARTBEAT_INTERVAL);
+  };
+
+  // Respuesta del cliente al ping (solo para monitoreo)
+  socket.on('heartbeat:pong', () => {
+    logger.debug(`Heartbeat recibido de ${socket.id}`);
+  });
 
   // ✅ Verificar disponibilidad de username
   socket.on("username:check", ({ username }) => {
@@ -116,7 +239,7 @@ io.on("connection", (socket) => {
     // Verificar si está baneado
     if (isBanned(userData.id, clientIp)) {
       const ipHashShort = hashIP(clientIp)?.substring(0, 16) + "...";
-      console.log(`⛔ Usuario baneado intentó conectarse: ${userData.username} - IP Hash: ${ipHashShort}`);
+      logger.ban(`Usuario baneado intentó conectarse: ${userData.username} - IP Hash: ${ipHashShort}`);
       socket.emit("banned", { reason: "Tu usuario o IP ha sido baneado del servidor." });
       socket.disconnect(true);
       return;
@@ -129,7 +252,7 @@ io.on("connection", (socket) => {
     );
 
     if (alreadyExists) {
-      console.log(`⚠️ Intento de registro con username duplicado: ${userData.username}`);
+      logger.warning(`Intento de registro con username duplicado: ${userData.username}`);
       socket.emit("username:taken", { 
         message: "Este nombre de usuario ya está en uso." 
       });
@@ -153,12 +276,15 @@ io.on("connection", (socket) => {
       connectedAt: new Date().toISOString()
     });
 
-    console.log(`👤 Usuario registrado: ${userData.username} (${socket.id}) - Rol: ${userRole}`);
+    logger.user(`Registrado: ${userData.username} (${socket.id}) - Rol: ${userRole}`);
+
+    // Iniciar heartbeat para este usuario
+    startHeartbeat();
 
     // Enviar rol actualizado al usuario si es admin
     if (isAdmin) {
       socket.emit("role:updated", { role: 'admin' });
-      console.log(`👑 ADMIN DETECTADO - ${userData.username}`);
+      logger.admin(`ADMIN DETECTADO - ${userData.username}`);
     }
 
     // Enviar usuario nuevo a todos con rol incluido
@@ -176,7 +302,7 @@ io.on("connection", (socket) => {
   socket.on("users:request", () => {
     const usersList = Array.from(connectedUsers.values());
     socket.emit("users:list", usersList);
-    console.log(`📋 Lista de usuarios enviada: ${usersList.length} usuarios`);
+    logger.debug(`Lista de usuarios enviada: ${usersList.length} usuarios`);
   });
 
   // User joins channel
@@ -190,12 +316,34 @@ io.on("connection", (socket) => {
       messages: CHANNELS[channel] || []
     });
     
-    console.log(`📢 Usuario ${userId} se unió al canal ${channel}`);
+    logger.debug(`Usuario ${userId} se unió al canal ${channel}`);
   });
 
   // Recibe nuevo mensaje desde el frontend
   socket.on("message:send", (msgData) => {
+    // ✅ Verificar rate limit
+    if (!checkRateLimit(socket.id, 'message')) {
+      socket.emit('rate-limit-exceeded', { 
+        message: 'Estás enviando mensajes demasiado rápido. Por favor, espera unos segundos.' 
+      });
+      logger.warning(`Rate limit excedido: ${msgData.username}`);
+      return;
+    }
+
     const channelId = msgData.channelId || 'general';
+    
+    // Validar contenido del mensaje
+    if (!msgData.content || msgData.content.trim().length === 0) {
+      return;
+    }
+    
+    // Limitar longitud del mensaje
+    if (msgData.content.length > 2000) {
+      socket.emit('message-error', { 
+        message: 'El mensaje es demasiado largo (máximo 2000 caracteres).' 
+      });
+      return;
+    }
     
     // Asigna un id si no viene
     msgData.id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
@@ -206,7 +354,7 @@ io.on("connection", (socket) => {
 
     // Envía a todos los DEL canal ese mensaje
     io.to(channelId).emit("message:received", msgData);
-    console.log(`💬 Mensaje en ${channelId} de ${msgData.username}:`, msgData.content);
+    logger.message(`${channelId}/${msgData.username}: ${msgData.content.substring(0, 50)}${msgData.content.length > 50 ? '...' : ''}`);
   });
 
   // ✅ ADMIN: Eliminar mensaje
@@ -215,7 +363,7 @@ io.on("connection", (socket) => {
     
     // Verificar que es admin
     if (!admin || admin.role !== 'admin') {
-      console.log(`⚠️ Usuario ${admin?.username} intentó eliminar mensaje sin permisos`);
+      logger.warning(`Usuario ${admin?.username} intentó eliminar mensaje sin permisos`);
       return;
     }
 
@@ -235,7 +383,7 @@ io.on("connection", (socket) => {
           messages: CHANNELS[channelId]
         });
         
-        console.log(`🗑️ Admin ${admin.username} eliminó mensaje de ${deletedMsg.username}`);
+        logger.admin(`${admin.username} eliminó mensaje de ${deletedMsg.username}`);
       }
     }
   });
@@ -246,7 +394,7 @@ io.on("connection", (socket) => {
     
     // Verificar que es admin
     if (!admin || admin.role !== 'admin') {
-      console.log(`⚠️ Usuario ${admin?.username} intentó limpiar canal sin permisos`);
+      logger.warning(`Usuario ${admin?.username} intentó limpiar canal sin permisos`);
       return;
     }
 
@@ -260,7 +408,7 @@ io.on("connection", (socket) => {
       messages: []
     });
     
-    console.log(`🧹 Admin ${admin.username} limpió el canal ${channelId}`);
+    logger.admin(`${admin.username} limpió el canal ${channelId}`);
   });
 
   // ✅ ADMIN: Banear usuario
@@ -269,7 +417,7 @@ io.on("connection", (socket) => {
     
     // Verificar que es admin
     if (!admin || admin.role !== 'admin') {
-      console.log(`⚠️ Usuario ${admin?.username} intentó banear sin permisos`);
+      logger.warning(`Usuario ${admin?.username} intentó banear sin permisos`);
       return;
     }
 
@@ -302,28 +450,33 @@ io.on("connection", (socket) => {
       io.emit("user:banned", { userId, username });
       
       const targetIpHash = hashIP(targetIp)?.substring(0, 16) + "...";
-      console.log(`🔨 Admin ${admin.username} baneó a ${username} - IP Hash: ${targetIpHash}`);
+      logger.ban(`Admin ${admin.username} baneó a ${username} - IP Hash: ${targetIpHash}`);
     }
   });
 
   // ✅ Voice channel join
   socket.on("voice:join", ({ channelName, userId }) => {
-    console.log(`🎤 Usuario ${userId} se unió a voz: ${channelName}`);
+    logger.debug(`Usuario ${userId} se unió a voz: ${channelName}`);
     io.emit("voice:update", { userId, channelName, action: "join" });
   });
 
   // ✅ Voice channel leave
   socket.on("voice:leave", ({ channelName, userId }) => {
-    console.log(`🔇 Usuario ${userId} salió de voz: ${channelName}`);
+    logger.debug(`Usuario ${userId} salió de voz: ${channelName}`);
     io.emit("voice:update", { userId, channelName, action: "leave" });
   });
 
   // ✅ Desconexión
   socket.on("disconnect", () => {
+    // Limpiar heartbeat interval
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+    }
+
     const user = connectedUsers.get(socket.id);
     
     if (user) {
-      console.log(`⛔ Usuario desconectado: ${user.username} (${socket.id})`);
+      logger.user(`Desconectado: ${user.username} (${socket.id})`);
       
       // Eliminar usuario
       connectedUsers.delete(socket.id);
@@ -341,16 +494,18 @@ io.on("connection", (socket) => {
       const usersList = Array.from(connectedUsers.values());
       io.emit("users:update", usersList);
       
-      console.log(`👥 Usuarios restantes: ${usersList.length}`);
+      logger.debug(`Usuarios restantes: ${usersList.length}`);
     } else {
-      console.log("⛔ Usuario desconectado (no registrado):", socket.id);
+      logger.debug(`Usuario desconectado (no registrado): ${socket.id}`);
     }
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  console.log(`📡 Socket.IO escuchando en puerto ${PORT}`);
-  console.log(`🛡️ Sistema de baneos activado`);
+  logger.server(`Servidor corriendo en puerto ${PORT}`);
+  logger.socket(`Socket.IO escuchando en puerto ${PORT}`);
+  logger.security(`Sistema de baneos activado`);
+  logger.security(`Rate limiting activado (5 msg/10s)`);
+  logger.info(`Heartbeat system ready`);
 });
