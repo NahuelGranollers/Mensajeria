@@ -589,6 +589,187 @@ io.on("connection", (socket) => {
     io.emit("voice:update", { userId, channelName, action: "leave" });
   });
 
+  // ✅ ADMIN: Eliminar todos los usuarios registrados
+  socket.on("admin:clear-users", ({ adminId }) => {
+    const admin = connectedUsers.get(socket.id);
+    
+    if (!admin || admin.role !== 'admin') {
+      logger.warning(`Usuario ${admin?.username} intentó limpiar usuarios sin permisos`);
+      return;
+    }
+
+    const adminIpHash = admin.ipHash;
+    
+    // Limpiar todos los usuarios excepto el admin
+    registeredUsers = {};
+    if (adminIpHash && admin) {
+      registeredUsers[adminIpHash] = {
+        id: admin.id,
+        username: admin.username,
+        avatar: admin.avatar,
+        role: admin.role,
+        ipHash: adminIpHash,
+        lastSeen: new Date().toISOString(),
+        registeredAt: new Date().toISOString()
+      };
+    }
+    saveRegisteredUsers();
+
+    // Desconectar a todos los usuarios excepto el admin
+    for (const [socketId, userData] of connectedUsers.entries()) {
+      if (userData.role !== 'admin') {
+        const targetSocket = io.sockets.sockets.get(socketId);
+        if (targetSocket) {
+          targetSocket.emit("kicked", { 
+            reason: "El administrador ha limpiado la base de usuarios." 
+          });
+          targetSocket.disconnect(true);
+        }
+      }
+    }
+
+    logger.admin(`${admin.username} eliminó todos los usuarios registrados`);
+    socket.emit("admin:action-success", { action: "clear-users", message: "Usuarios eliminados correctamente" });
+  });
+
+  // ✅ ADMIN: Limpiar todos los mensajes
+  socket.on("admin:clear-all-messages", ({ adminId }) => {
+    const admin = connectedUsers.get(socket.id);
+    
+    if (!admin || admin.role !== 'admin') {
+      logger.warning(`Usuario ${admin?.username} intentó limpiar mensajes sin permisos`);
+      return;
+    }
+
+    // Limpiar todos los canales
+    for (const channelId in CHANNELS) {
+      CHANNELS[channelId] = [];
+      io.to(channelId).emit("channel:history", {
+        channelId,
+        messages: []
+      });
+    }
+
+    logger.admin(`${admin.username} eliminó todos los mensajes del servidor`);
+    io.emit("admin:notification", { message: "Todos los mensajes han sido eliminados por un administrador" });
+    socket.emit("admin:action-success", { action: "clear-messages", message: "Mensajes eliminados correctamente" });
+  });
+
+  // ✅ ADMIN: Limpiar lista de baneados
+  socket.on("admin:clear-banned", ({ adminId }) => {
+    const admin = connectedUsers.get(socket.id);
+    
+    if (!admin || admin.role !== 'admin') {
+      logger.warning(`Usuario ${admin?.username} intentó limpiar baneos sin permisos`);
+      return;
+    }
+
+    bannedList = { ips: [], userIds: [] };
+    saveBannedList();
+
+    logger.admin(`${admin.username} limpió la lista de baneados`);
+    socket.emit("admin:action-success", { action: "clear-banned", message: "Lista de baneos limpiada correctamente" });
+  });
+
+  // ✅ ADMIN: Limpiar caché del servidor
+  socket.on("admin:clear-cache", ({ adminId }) => {
+    const admin = connectedUsers.get(socket.id);
+    
+    if (!admin || admin.role !== 'admin') {
+      logger.warning(`Usuario ${admin?.username} intentó limpiar caché sin permisos`);
+      return;
+    }
+
+    // Limpiar rate limits
+    rateLimits.clear();
+
+    logger.admin(`${admin.username} limpió el caché del servidor`);
+    socket.emit("admin:action-success", { action: "clear-cache", message: "Caché limpiado correctamente" });
+  });
+
+  // ✅ ADMIN: Expulsar todos los usuarios
+  socket.on("admin:kick-all-users", ({ adminId }) => {
+    const admin = connectedUsers.get(socket.id);
+    
+    if (!admin || admin.role !== 'admin') {
+      logger.warning(`Usuario ${admin?.username} intentó expulsar usuarios sin permisos`);
+      return;
+    }
+
+    let kickedCount = 0;
+    for (const [socketId, userData] of connectedUsers.entries()) {
+      if (userData.role !== 'admin' && socketId !== socket.id) {
+        const targetSocket = io.sockets.sockets.get(socketId);
+        if (targetSocket) {
+          targetSocket.emit("kicked", { 
+            reason: `Has sido expulsado por el administrador ${admin.username}.` 
+          });
+          targetSocket.disconnect(true);
+          kickedCount++;
+        }
+      }
+    }
+
+    logger.admin(`${admin.username} expulsó a ${kickedCount} usuarios`);
+    socket.emit("admin:action-success", { 
+      action: "kick-all", 
+      message: `${kickedCount} usuarios expulsados correctamente` 
+    });
+  });
+
+  // ✅ ADMIN: Exportar datos del servidor
+  socket.on("admin:export-data", ({ adminId }) => {
+    const admin = connectedUsers.get(socket.id);
+    
+    if (!admin || admin.role !== 'admin') {
+      logger.warning(`Usuario ${admin?.username} intentó exportar datos sin permisos`);
+      return;
+    }
+
+    const exportData = {
+      timestamp: new Date().toISOString(),
+      users: registeredUsers,
+      bannedList: bannedList,
+      channels: Object.keys(CHANNELS).map(channelId => ({
+        id: channelId,
+        messageCount: CHANNELS[channelId].length
+      })),
+      connectedUsers: connectedUsers.size,
+      totalUsers: Object.keys(registeredUsers).length
+    };
+
+    logger.admin(`${admin.username} exportó los datos del servidor`);
+    socket.emit("admin:export-data-result", { data: exportData });
+  });
+
+  // ✅ ADMIN: Reiniciar servidor Socket.IO
+  socket.on("admin:restart-server", ({ adminId }) => {
+    const admin = connectedUsers.get(socket.id);
+    
+    if (!admin || admin.role !== 'admin') {
+      logger.warning(`Usuario ${admin?.username} intentó reiniciar servidor sin permisos`);
+      return;
+    }
+
+    logger.admin(`${admin.username} está reiniciando el servidor Socket.IO`);
+    
+    // Notificar a todos
+    io.emit("server:restarting", { 
+      message: "El servidor se está reiniciando. Serás reconectado en breve." 
+    });
+
+    // Desconectar a todos después de 2 segundos
+    setTimeout(() => {
+      io.disconnectSockets();
+      logger.server("Todas las conexiones cerradas para reinicio");
+    }, 2000);
+
+    socket.emit("admin:action-success", { 
+      action: "restart-server", 
+      message: "Servidor reiniciando..." 
+    });
+  });
+
   // ✅ Desconexión
   socket.on("disconnect", () => {
     // Limpiar heartbeat interval
