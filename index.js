@@ -506,14 +506,19 @@ app.get("/auth/user", (req, res) => {
 
 // Ruta 4: Logout
 app.post("/auth/logout", (req, res) => {
+  const username = req.session?.discordUser?.username || 'Unknown';
+  
   req.session.destroy((err) => {
     if (err) {
       logger.error("❌ Error destroying session:", err);
       return res.status(500).json({ error: "Logout failed" });
     }
     
+    // Clear both possible cookie names
+    res.clearCookie("upg.sid");
     res.clearCookie("connect.sid");
-    logger.info("👋 User logged out successfully");
+    
+    logger.info(`👋 User ${username} logged out successfully`);
     res.json({ success: true });
   });
 });
@@ -817,6 +822,51 @@ io.on("connection", (socket) => {
   socket.on("voice:leave", ({ channelName, userId }) => {
     logger.debug(`Usuario ${userId} salió de voz: ${channelName}`);
     io.emit("voice:update", { userId, channelName, action: "leave" });
+  });
+
+  // ✅ ADMIN: Kick/Eliminar usuario (sin ban)
+  socket.on("admin:kick-user", ({ userId, username, adminId }) => {
+    const admin = connectedUsers.get(socket.id);
+    
+    // Verificar que es admin
+    if (!admin || admin.role !== 'admin') {
+      logger.warning(`Usuario ${admin?.username} intentó kickear sin permisos`);
+      return;
+    }
+
+    // Buscar usuario a kickear
+    let targetSocket = null;
+    
+    for (const [socketId, userData] of connectedUsers.entries()) {
+      if (userData.id === userId) {
+        targetSocket = socketId;
+        break;
+      }
+    }
+
+    if (targetSocket) {
+      // Eliminar de usuarios conectados
+      connectedUsers.delete(targetSocket);
+      usedUsernames.delete(username);
+      
+      // Desconectar usuario
+      const targetSocketObj = io.sockets.sockets.get(targetSocket);
+      if (targetSocketObj) {
+        targetSocketObj.emit("kicked", { 
+          reason: `Has sido expulsado por el administrador ${admin.username}.` 
+        });
+        targetSocketObj.disconnect(true);
+      }
+      
+      // Notificar a todos
+      io.emit("user:kicked", { userId, username });
+      
+      logger.admin(`Admin ${admin.username} expulsó a ${username}`);
+      
+      // Actualizar lista de usuarios
+      const allUsers = Array.from(connectedUsers.values());
+      io.emit("users:update", allUsers);
+    }
   });
 
   // ✅ ADMIN: Eliminar todos los usuarios registrados
