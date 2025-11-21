@@ -86,6 +86,24 @@ const server = http.createServer(app);
 // ✅ Middleware
 app.use(express.json());
 app.use(cookieParser());
+
+// CORS para rutas Express (OAuth)
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://unaspartidillasgang.online',
+    'https://unaspartidillas.online',
+    'http://localhost:5173'
+  ];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-super-secret-key-change-this',
   resave: false,
@@ -93,6 +111,7 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production', // true en producción (HTTPS)
     httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' para cross-domain
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 días
   }
 }));
@@ -303,9 +322,9 @@ setInterval(() => {
 app.get("/auth/discord", (req, res) => {
   const redirectUri = process.env.DISCORD_REDIRECT_URI;
   const clientId = process.env.DISCORD_CLIENT_ID;
-  const scope = "identify rpc.voice.read";
+  const scope = "identify";
   
-  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
+  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}`;
   
   logger.info(`🔐 Redirecting to Discord OAuth: ${discordAuthUrl}`);
   res.redirect(discordAuthUrl);
