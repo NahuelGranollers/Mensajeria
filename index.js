@@ -92,13 +92,7 @@ loadBannedList();
 io.on("connection", (socket) => {
   const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
   const ipHash = hashIP(clientIp);
-  
-  // 🔍 Debug detallado de IP
   console.log("🔌 Usuario conectado:", socket.id);
-  console.log("   📍 IP Original:", clientIp);
-  console.log("   🔐 IP Hash Completo:", ipHash);
-  console.log("   ✅ Hash Esperado:", ADMIN_IP_HASH);
-  console.log("   🎯 ¿Es Admin?:", ipHash === ADMIN_IP_HASH);
 
   // ✅ Verificar disponibilidad de username
   socket.on("username:check", ({ username }) => {
@@ -149,12 +143,6 @@ io.on("connection", (socket) => {
     // Detectar si es admin por IP
     const isAdmin = isAdminIP(clientIp);
     const userRole = isAdmin ? 'admin' : 'user';
-    
-    // 🔍 Debug de detección de admin
-    console.log(`🔐 Verificación Admin para ${userData.username}:`);
-    console.log(`   IP Cliente: ${clientIp}`);
-    console.log(`   Hash: ${hashIP(clientIp)}`);
-    console.log(`   ¿Es Admin?: ${isAdmin}`);
 
     // Guardar usuario con su socketId e IP
     connectedUsers.set(socket.id, {
@@ -170,7 +158,7 @@ io.on("connection", (socket) => {
     // Enviar rol actualizado al usuario si es admin
     if (isAdmin) {
       socket.emit("role:updated", { role: 'admin' });
-      console.log(`👑 ¡¡¡ ADMIN DETECTADO POR IP !!! - ${userData.username}`);
+      console.log(`👑 ADMIN DETECTADO - ${userData.username}`);
     }
 
     // Enviar usuario nuevo a todos con rol incluido
