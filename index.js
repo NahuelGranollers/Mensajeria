@@ -108,6 +108,11 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
   next();
 });
 
@@ -500,7 +505,7 @@ app.get("/auth/user", (req, res) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
   
-  logger.info(`✅ Discord user session found: ${req.session.discordUser.username}`);
+  logger.info(`✅ Discord user session found (ID: ${req.session.discordUser.id}, username: ${req.session.discordUser.username})`);
   res.json(req.session.discordUser);
 });
 
