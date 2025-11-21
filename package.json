@@ -7,12 +7,14 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "socket.io": "^4.8.1",
     "axios": "^1.7.9",
-    "express-session": "^1.18.2",
+    "better-sqlite3": "^12.4.5",
     "cookie-parser": "^1.4.7",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.2",
+    "pg": "^8.16.3",
+    "socket.io": "^4.8.1"
   },
   "engines": {
     "node": ">=18.0.0"
