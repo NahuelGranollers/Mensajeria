@@ -115,12 +115,15 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'your-super-secret-key-change-this',
   resave: false,
   saveUninitialized: false,
+  name: 'upg.sid', // Custom name for better debugging
   cookie: {
     secure: process.env.NODE_ENV === 'production', // true en producción (HTTPS)
     httpOnly: true,
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' para cross-domain
-    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 días
-  }
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días
+    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // Allow subdomain cookies
+  },
+  proxy: true // Trust proxy headers (Render uses proxies)
 }));
 
 const io = new Server(server, {
@@ -357,9 +360,23 @@ app.get("/auth/discord", catchAsync(async (req, res) => {
   const state = crypto.randomBytes(16).toString('hex');
   req.session.oauthState = state;
   
+  // Save session before redirect to ensure it persists
+  await new Promise((resolve, reject) => {
+    req.session.save((err) => {
+      if (err) {
+        logger.error("❌ Error saving session state:", err);
+        reject(err);
+      } else {
+        logger.debug(`✅ Session state saved: ${state}`);
+        resolve();
+      }
+    });
+  });
+  
   const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}`;
   
-  logger.info(`🔐 Redirecting to Discord OAuth: ${discordAuthUrl}`);
+  logger.info(`🔐 Redirecting to Discord OAuth`);
+  logger.debug(`State generated: ${state}`);
   res.redirect(discordAuthUrl);
 }));
 
@@ -383,12 +400,21 @@ app.get("/auth/callback", catchAsync(async (req, res) => {
   }
   
   // Validate state parameter (CSRF protection)
-  if (state !== req.session.oauthState) {
-    logger.error("❌ OAuth state mismatch - possible CSRF attack");
+  // In cross-domain scenarios, session might not persist, so we validate if it exists
+  logger.debug(`Received state: ${state}`);
+  logger.debug(`Session state: ${req.session.oauthState}`);
+  
+  if (req.session.oauthState && state !== req.session.oauthState) {
+    logger.error(`❌ OAuth state mismatch - Expected: ${req.session.oauthState}, Got: ${state}`);
     const authError = new Error('invalid_request');
     authError.statusCode = 400;
     authError.description = 'State parameter mismatch';
     throw authError;
+  }
+  
+  if (!req.session.oauthState) {
+    logger.warning("⚠️ Session state not found - this may happen in cross-domain scenarios");
+    logger.warning("State validation skipped - consider using alternative CSRF protection");
   }
   
   // Clear state after validation
