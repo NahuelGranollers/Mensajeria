@@ -184,6 +184,7 @@ function getAllUsers() {
       avatar: registeredUser.avatar,
       role: registeredUser.role,
       online: isOnline,
+      status: isOnline ? 'online' : 'offline',
       socketId: socketId,
       lastSeen: registeredUser.lastSeen,
       registeredAt: registeredUser.registeredAt
