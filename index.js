@@ -726,19 +726,31 @@ io.on("connection", (socket) => {
       logger.admin(`Admin conectado: ${finalUserData.username}`);
     }
 
+    // Confirmar registro al usuario
     socket.emit("user:registered", finalUserData);
 
+    // Obtener lista actualizada de todos los usuarios
     const allUsers = getAllUsers();
+    logger.info(`📋 Total usuarios: ${allUsers.length} (${connectedUsers.size} online, ${allUsers.length - connectedUsers.size} offline)`);
+    
+    // 1. Enviar lista completa al usuario que acaba de conectarse
     socket.emit("users:list", allUsers);
+    logger.debug(`✅ Lista enviada al nuevo usuario ${finalUserData.username}: ${allUsers.length} usuarios`);
 
-    io.emit("user:online", { 
+    // 2. Notificar a TODOS los DEMÁS clientes sobre el nuevo usuario online
+    socket.broadcast.emit("user:online", { 
       userId: finalUserData.id, 
       username: finalUserData.username,
       avatar: finalUserData.avatar,
-      role: finalUserData.role
+      role: finalUserData.role,
+      online: true,
+      status: 'online'
     });
+    logger.debug(`📢 Notificación user:online enviada a otros clientes sobre ${finalUserData.username}`);
 
+    // 3. Enviar lista actualizada completa a TODOS los clientes (incluyendo el nuevo)
     io.emit("users:update", allUsers);
+    logger.debug(`🔄 Lista actualizada enviada a todos: ${allUsers.length} usuarios`);
   });
 
   // ✅ Solicitud de lista de usuarios (incluye online + offline)
