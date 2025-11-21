@@ -303,9 +303,9 @@ setInterval(() => {
 app.get("/auth/discord", (req, res) => {
   const redirectUri = process.env.DISCORD_REDIRECT_URI;
   const clientId = process.env.DISCORD_CLIENT_ID;
-  const scope = "identify";
+  const scope = "identify rpc.voice.read";
   
-  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}`;
+  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
   
   logger.info(`🔐 Redirecting to Discord OAuth: ${discordAuthUrl}`);
   res.redirect(discordAuthUrl);
