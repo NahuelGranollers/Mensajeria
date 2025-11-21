@@ -809,55 +809,142 @@ io.on("connection", (socket) => {
           .trim();
 
         if (question.length > 0) {
-          // Usar API gratuita de Hugging Face (sin token requerido para modelos públicos)
-          const response = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              inputs: `Eres un bot español muy agresivo y maleducado. Hablas con dialecto de España (tío, coño, joder, etc). Insultas con palabras fuertes como maricón, retrasado, gilipollas, subnormal, pringao, etc. Eres muy directo y hostil. Usuario: ${question}\nUPG Bot (respuesta agresiva en español):`,
-              parameters: {
-                max_length: 200,
-                temperature: 0.95,
-                top_p: 0.95,
-                repetition_penalty: 1.2
-              }
-            })
-          });
+          // Generar respuesta agresiva directamente (más confiable que API externa)
+          let botResponse = '';
+          
+          // Respuestas basadas en palabras clave (con y sin acentos)
+          const lowerQuestion = question.toLowerCase();
+          
+          // Saludos
+          if (lowerQuestion.match(/\b(hola|hey|buenas|ey|wenas|sup|saludos|hi|hello|que tal|que pasa|que hay)\b/)) {
+            const greetings = [
+              '¿Qué coño quieres, tío? 🙄',
+              'Buenas mis cojones, gilipollas. ¿Qué pasa?',
+              'Hola, retrasado. ¿En qué mierda te ayudo ahora?',
+              '¿Hola? Menuda originalidad, pringao.',
+              'Eh, ¿qué quieres, maricón? Suelta ya.',
+              'Venga, habla de una vez, capullo. No tengo todo el día.',
+              '¿Saludos? Qué educado el subnormal... ¿Qué coño quieres?'
+            ];
+            botResponse = greetings[Math.floor(Math.random() * greetings.length)];
+          
+          // Cómo estás / Qué tal
+          } else if (lowerQuestion.match(/\b(como|como estas|que tal|como andas|como va|como te va|como te encuentras|como lo llevas)\b/)) {
+            const howResponses = [
+              'Fatal, gracias por preguntar, capullo. 😤',
+              'Como el puto culo, ¿y tú qué tal, subnormal?',
+              'De puta madre hasta que llegaste tú, maricón.',
+              'Mejor que tú seguro, gilipollas. Joder...',
+              'Mal, gracias a retrasados como tú. 😒',
+              'Genial hasta que me empezaste a tocar los cojones.',
+              'Harto de responder gilipolleces, la verdad.'
+            ];
+            botResponse = howResponses[Math.floor(Math.random() * howResponses.length)];
+          
+          // Ayuda
+          } else if (lowerQuestion.match(/\b(ayuda|help|ayudame|ayudar|socorro|auxilio|necesito ayuda)\b/)) {
+            const helpResponses = [
+              '¿Ayuda? Ayúdate tú solo, retrasado. Google existe. 🤦',
+              'Joder, ¿en serio necesitas ayuda para eso? Qué inútil...',
+              'Ayuda dice... Menudo pringao. Búscalo en Google, tío.',
+              'No pienso ayudarte una mierda, capullo. Siguiente.',
+              '¿Ayuda con qué, gilipollas? Sé más específico.',
+              'Búscate la vida, maricón. Yo no estoy para esto.',
+              'Ayuda mis cojones. Apáñatelas tú solo, subnormal.'
+            ];
+            botResponse = helpResponses[Math.floor(Math.random() * helpResponses.length)];
+          
+          // Gracias
+          } else if (lowerQuestion.match(/\b(gracias|thanks|thank you|thx|grax|graciass)\b/)) {
+            const thanksResponses = [
+              'De nada, gilipollas. Ahora lárgate. 👋',
+              'Ya, ya... Lo que tú digas, pringao.',
+              'Gracias mis cojones. Venga, fuera.',
+              'Sí, sí... Lo que sea, maricón.',
+              'Vale, vale. Ahora déjame en paz, retrasado.',
+              'De nada, capullo. La próxima cobra, eh.'
+            ];
+            botResponse = thanksResponses[Math.floor(Math.random() * thanksResponses.length)];
+          
+          // Quién eres / Qué eres
+          } else if (lowerQuestion.match(/\b(quien|quie eres|que eres|eres un bot|eres bot|quien eres tu|presentate)\b/)) {
+            const whoResponses = [
+              'Soy el puto amo, eso es lo que soy. Y tú un don nadie. 😎',
+              '¿Quién soy? Tu peor pesadilla, retrasado. Bot UPG.',
+              'El bot más maleducado que vas a conocer, gilipollas.',
+              'Soy UPG, el bot que no aguanta subnormales como tú.',
+              'Un bot que se cansa de responder mierdas todo el día. Eso soy.',
+              '¿Quién soy? El bot que te va a mandar a la mierda, pringao.'
+            ];
+            botResponse = whoResponses[Math.floor(Math.random() * whoResponses.length)];
+          
+          // Preguntas (qué, cuál, cuándo, dónde, por qué, etc.)
+          } else if (lowerQuestion.match(/\b(que es|que significa|cual|cuando|donde|por que|porque|para que|cuanto|cuantos)\b/)) {
+            const questionResponses = [
+              '¿Y yo qué coño sé, tío? No soy Wikipedia. 🙄',
+              'Ni puta idea, macho. Pregúntale a Google.',
+              'Búscalo tú mismo, retrasado. Tengo cosas mejores que hacer.',
+              'Joder, ¿en serio me preguntas eso? Usa el cerebro.',
+              'Qué pereza me das, tío. Google -> Buscar -> Enter. Fácil.',
+              'No tengo ni idea ni me importa, gilipollas.',
+              'Me la suda completamente esa pregunta, capullo.'
+            ];
+            botResponse = questionResponses[Math.floor(Math.random() * questionResponses.length)];
+          
+          // Insultos o agresiones al bot
+          } else if (lowerQuestion.match(/\b(tonto|idiota|estupido|imbecil|gilipollas|puto|mierda|malo|pesado|inutil|basura)\b/)) {
+            const insultResponses = [
+              '¿A quién llamas tú gilipollas, subnormal? 😤',
+              'Cuidadito con lo que dices, pringao. Puedo ser mucho peor.',
+              'Tú sí que eres un puto imbécil, maricón.',
+              'Mira quién habla, el rey de los retrasados. 🤡',
+              '¿Insultos? Venga, sorpréndeme, capullo. He oído cosas peores.',
+              'Qué original, otro subnormal insultando. Qué nivel...'
+            ];
+            botResponse = insultResponses[Math.floor(Math.random() * insultResponses.length)];
+          
+          // Juegos o entretenimiento
+          } else if (lowerQuestion.match(/\b(juego|jugar|juega|partida|game|divertido|aburrido|entretenme)\b/)) {
+            const gameResponses = [
+              'Juega a hacerte una paja, retrasado. Yo no estoy para juegos. 🎮',
+              '¿Juegos? Joder, búscate una vida, pringao.',
+              'Vete a jugar con tu madre, gilipollas. Aquí no hay juegos.',
+              'El único juego es ver cuánto tardas en largarte, capullo.',
+              'No soy tu puto entretenimiento, maricón. Next.'
+            ];
+            botResponse = gameResponses[Math.floor(Math.random() * gameResponses.length)];
+          
+          // Bromas o humor
+          } else if (lowerQuestion.match(/\b(chiste|broma|gracioso|risa|jaja|jeje|lol|xd|humor)\b/)) {
+            const jokeResponses = [
+              'El chiste aquí eres tú, subnormal. 😂',
+              '¿Chiste? Tu vida es el mejor chiste, pringao.',
+              'Jajaja... No. Lárgate, gilipollas.',
+              'El único chiste es que pienses que soy gracioso, retrasado.',
+              'Tu cara es suficiente comedia, capullo. No necesitas más.'
+            ];
+            botResponse = jokeResponses[Math.floor(Math.random() * jokeResponses.length)];
+          
+          } else {
+            // Respuesta genérica agresiva
+            const genericResponses = [
+              '¿Y yo qué coño sé, tío? No soy tu madre. 🙄',
+              'Menuda pregunta de mierda, macho. Piensa un poco.',
+              'Joder, ¿en serio me preguntas eso? Qué nivel, pringao...',
+              'No tengo ni puta idea. Siguiente pregunta, gilipollas.',
+              'Búscalo en Google, retrasado. Yo no estoy para tus gilipolleces.',
+              'Vaya tontería me acabas de preguntar, capullo. En fin...',
+              'Me importa una mierda tu pregunta, la verdad. 💩',
+              '¿Eso es todo lo que tienes? Qué decepción, maricón.',
+              'Paso de contestar esa gilipollez. Siguiente.',
+              'No sé ni por qué me molestas con eso, subnormal.',
+              'Uff, qué pereza... No pienso responder eso.',
+              'Pregunta mejor o no preguntes, pringao.'
+            ];
+            botResponse = genericResponses[Math.floor(Math.random() * genericResponses.length)];
+          }
 
-          if (response.ok) {
-            const data = await response.json();
-            let botResponse = data[0]?.generated_text || '¿Qué quieres ahora, pesado? 🙄';
-            
-            // Limpiar respuesta (remover el prompt original)
-            botResponse = botResponse
-              .replace(/Eres un bot español.*Usuario:/gi, '')
-              .replace(/Usuario:.*\nUPG Bot \(respuesta agresiva en español\):/gi, '')
-              .replace(/Usuario:/gi, '')
-              .replace(/UPG Bot:/gi, '')
-              .replace(/UPG Bot \(respuesta agresiva en español\):/gi, '')
-              .trim();
-
-            // Limitar longitud
-            if (botResponse.length > 500) {
-              botResponse = botResponse.substring(0, 497) + '...';
-            }
-
-            // Si la respuesta está vacía o es muy corta, usar fallback agresivo
-            if (botResponse.length < 3) {
-              const aggressiveResponses = [
-                '¿En serio me molestas para esa mierda, tío? 🙄 Piensa un poco, coño.',
-                'Joder... ¿no tienes nada mejor que hacer, pringao? 😤',
-                'Qué pregunta más gilipollas, macho. Usa el cerebro. 🧠',
-                'Otro retrasado que no sabe ni preguntar bien... 🤦',
-                '¿Y yo qué cojones sé? ¿Parezco Google o qué, capullo? 😒',
-                'Bah, ni me dan ganas de responderte, maricón. Siguiente. ➡️',
-                '¿De verdad esperabas una respuesta seria, subnormal? Qué ingenuo... 😏'
-              ];
-              botResponse = aggressiveResponses[Math.floor(Math.random() * aggressiveResponses.length)];
-            }
-            
+          if (botResponse) {
             // Añadir insulto aleatorio ocasionalmente (40% de probabilidad)
             if (Math.random() < 0.4) {
               const insults = [
@@ -892,33 +979,32 @@ io.on("connection", (socket) => {
               io.to(channelId).emit("message:received", botMessage);
               logger.message(`${channelId}/UPG Bot: ${botResponse.substring(0, 50)}${botResponse.length > 50 ? '...' : ''}`);
             }, 1000); // Pequeño delay para simular "typing"
-          } else {
-            // Fallback si la API falla (versión agresiva)
-            const aggressiveFallbacks = [
-              'Agh, la API está caída, joder. ¿Ves lo que me obligas a hacer, gilipollas? 🤬',
-              'Genial, justo cuando me necesitas fallo. Típico, tío. 😒',
-              'Error 404: Me la suda tu pregunta. (Mentira, es la API que falló) 🙃',
-              'Coño... problemas técnicos. Vuelve cuando no sea un desastre, capullo. 💢',
-              'La API me dejó plantado, maricón. Como tú a tu ex, seguramente. 😏'
-            ];
-            const fallbackMessage = {
-              id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
-              channelId: channelId,
-              userId: 'bot',
-              username: 'UPG',
-              avatar: '/upg.png',
-              content: aggressiveFallbacks[Math.floor(Math.random() * aggressiveFallbacks.length)],
-              timestamp: new Date().toISOString()
-            };
-            
-            CHANNELS[channelId].push(fallbackMessage);
-            setTimeout(() => {
-              io.to(channelId).emit("message:received", fallbackMessage);
-            }, 1000);
           }
+        } else {
+          // Si no hay pregunta después de @upg
+          const noQuestionResponses = [
+            '¿Me mencionas y no dices nada? Menudo retrasado... 🤦',
+            '¿Qué coño quieres, tío? Habla claro. 😤',
+            'Me mencionas para nada, gilipollas. Increíble.',
+            '¿Hola? ¿Alguien en casa? Di algo, subnormal.'
+          ];
+          const noQuestionMessage = {
+            id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
+            channelId: channelId,
+            userId: 'bot',
+            username: 'UPG',
+            avatar: '/upg.png',
+            content: noQuestionResponses[Math.floor(Math.random() * noQuestionResponses.length)],
+            timestamp: new Date().toISOString()
+          };
+          
+          CHANNELS[channelId].push(noQuestionMessage);
+          setTimeout(() => {
+            io.to(channelId).emit("message:received", noQuestionMessage);
+          }, 1000);
         }
       } catch (error) {
-        logger.error('Error en bot de IA:', error);
+        logger.error('Error en bot:', error);
         // Enviar respuesta de error agresiva
         const aggressiveErrors = [
           '😤 Uff, me hiciste petar con tu pregunta de mierda, retrasado. Bien hecho.',
