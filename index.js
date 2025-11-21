@@ -116,6 +116,83 @@ function isAdminIP(ip) {
   return ipHash === ADMIN_IP_HASH;
 }
 
+// ✅ Sistema de usuarios registrados permanentemente
+const USERS_FILE = path.join(__dirname, 'users.json');
+let registeredUsers = {}; // ipHash -> userData
+
+// Cargar usuarios registrados
+function loadRegisteredUsers() {
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const data = fs.readFileSync(USERS_FILE, 'utf8');
+      registeredUsers = JSON.parse(data);
+      logger.success(`Usuarios registrados cargados: ${Object.keys(registeredUsers).length} usuarios`);
+    }
+  } catch (error) {
+    logger.error('Error cargando usuarios registrados:', error);
+  }
+}
+
+// Guardar usuarios registrados
+function saveRegisteredUsers() {
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(registeredUsers, null, 2));
+  } catch (error) {
+    logger.error('Error guardando usuarios registrados:', error);
+  }
+}
+
+// Obtener o crear usuario por IP
+function getUserByIP(ipHash) {
+  return registeredUsers[ipHash] || null;
+}
+
+// Registrar/actualizar usuario por IP
+function registerUser(ipHash, userData) {
+  registeredUsers[ipHash] = {
+    ...userData,
+    ipHash,
+    lastSeen: new Date().toISOString(),
+    registeredAt: registeredUsers[ipHash]?.registeredAt || new Date().toISOString()
+  };
+  saveRegisteredUsers();
+}
+
+// Obtener lista completa de usuarios (online + offline)
+function getAllUsers() {
+  const allUsers = [];
+  
+  // Agregar todos los usuarios registrados
+  for (const ipHash in registeredUsers) {
+    const registeredUser = registeredUsers[ipHash];
+    
+    // Buscar si está conectado
+    let isOnline = false;
+    let socketId = null;
+    
+    for (const [sid, connectedUser] of connectedUsers.entries()) {
+      if (connectedUser.id === registeredUser.id) {
+        isOnline = true;
+        socketId = sid;
+        break;
+      }
+    }
+    
+    allUsers.push({
+      id: registeredUser.id,
+      username: registeredUser.username,
+      avatar: registeredUser.avatar,
+      role: registeredUser.role,
+      online: isOnline,
+      socketId: socketId,
+      lastSeen: registeredUser.lastSeen,
+      registeredAt: registeredUser.registeredAt
+    });
+  }
+  
+  return allUsers;
+}
+
 // ✅ Sistema de baneos
 const BANNED_FILE = path.join(__dirname, 'banned.json');
 let bannedList = { ips: [], userIds: [] };
@@ -157,7 +234,8 @@ function banUser(userId, ip) {
   saveBannedList();
 }
 
-// Cargar baneos al iniciar
+// Cargar datos al iniciar
+loadRegisteredUsers();
 loadBannedList();
 
 // ✅ Rate Limiting - Prevenir spam
@@ -238,71 +316,115 @@ io.on("connection", (socket) => {
   socket.on("user:join", (userData) => {
     // Verificar si está baneado
     if (isBanned(userData.id, clientIp)) {
-      const ipHashShort = hashIP(clientIp)?.substring(0, 16) + "...";
+      const ipHashShort = ipHash?.substring(0, 16) + "...";
       logger.ban(`Usuario baneado intentó conectarse: ${userData.username} - IP Hash: ${ipHashShort}`);
       socket.emit("banned", { reason: "Tu usuario o IP ha sido baneado del servidor." });
       socket.disconnect(true);
       return;
     }
 
-    // Verificar nuevamente que el username no esté en uso (por si acaso)
-    const normalizedUsername = userData.username.toLowerCase().trim();
-    const alreadyExists = Array.from(usedUsernames).some(
-      name => name.toLowerCase() === normalizedUsername
-    );
+    // ✅ Verificar si este IP ya tiene usuario registrado
+    const existingUser = getUserByIP(ipHash);
+    
+    let finalUserData;
+    let isNewUser = false;
 
-    if (alreadyExists) {
-      logger.warning(`Intento de registro con username duplicado: ${userData.username}`);
-      socket.emit("username:taken", { 
-        message: "Este nombre de usuario ya está en uso." 
-      });
-      socket.disconnect(true);
-      return;
+    if (existingUser) {
+      // Usuario existente - recuperar datos guardados (nombre y avatar)
+      finalUserData = {
+        id: existingUser.id,
+        username: existingUser.username,
+        avatar: existingUser.avatar,
+        role: existingUser.role,
+        socketId: socket.id,
+        ip: clientIp,
+        ipHash,
+        online: true,
+        connectedAt: new Date().toISOString()
+      };
+      
+      logger.user(`Usuario existente reconectado: ${existingUser.username} (${socket.id})`);
+    } else {
+      // Usuario nuevo - verificar que el username no esté en uso
+      const normalizedUsername = userData.username.toLowerCase().trim();
+      const alreadyExists = Array.from(usedUsernames).some(
+        name => name.toLowerCase() === normalizedUsername
+      );
+
+      if (alreadyExists) {
+        logger.warning(`Intento de registro con username duplicado: ${userData.username}`);
+        socket.emit("username:taken", { 
+          message: "Este nombre de usuario ya está en uso." 
+        });
+        socket.disconnect(true);
+        return;
+      }
+
+      // Detectar si es admin por IP
+      const isAdmin = isAdminIP(clientIp);
+      const userRole = isAdmin ? 'admin' : 'user';
+
+      finalUserData = {
+        ...userData,
+        role: userRole,
+        socketId: socket.id,
+        ip: clientIp,
+        ipHash,
+        online: true,
+        connectedAt: new Date().toISOString()
+      };
+
+      isNewUser = true;
+      logger.user(`Usuario nuevo registrado: ${userData.username} (${socket.id}) - Rol: ${userRole}`);
     }
 
     // Agregar username al set de usados
-    usedUsernames.add(userData.username);
+    usedUsernames.add(finalUserData.username);
 
-    // Detectar si es admin por IP
-    const isAdmin = isAdminIP(clientIp);
-    const userRole = isAdmin ? 'admin' : 'user';
+    // Guardar en connectedUsers
+    connectedUsers.set(socket.id, finalUserData);
 
-    // Guardar usuario con su socketId e IP
-    connectedUsers.set(socket.id, {
-      ...userData,
-      role: userRole,
-      socketId: socket.id,
-      ip: clientIp,
-      connectedAt: new Date().toISOString()
+    // Guardar permanentemente en users.json
+    registerUser(ipHash, {
+      id: finalUserData.id,
+      username: finalUserData.username,
+      avatar: finalUserData.avatar,
+      role: finalUserData.role
     });
-
-    logger.user(`Registrado: ${userData.username} (${socket.id}) - Rol: ${userRole}`);
 
     // Iniciar heartbeat para este usuario
     startHeartbeat();
 
     // Enviar rol actualizado al usuario si es admin
-    if (isAdmin) {
+    if (finalUserData.role === 'admin') {
       socket.emit("role:updated", { role: 'admin' });
-      logger.admin(`ADMIN DETECTADO - ${userData.username}`);
+      logger.admin(`ADMIN DETECTADO - ${finalUserData.username}`);
     }
 
-    // Enviar usuario nuevo a todos con rol incluido
-    io.emit("user:joined", { ...userData, role: userRole });
+    // Enviar confirmación al usuario con sus datos finales
+    socket.emit("user:registered", finalUserData);
 
-    // Enviar lista completa de usuarios al nuevo usuario
-    const usersList = Array.from(connectedUsers.values());
-    socket.emit("users:list", usersList);
+    // Enviar lista completa de TODOS los usuarios (online + offline)
+    const allUsers = getAllUsers();
+    socket.emit("users:list", allUsers);
+
+    // Notificar a todos que este usuario se conectó
+    io.emit("user:online", { 
+      userId: finalUserData.id, 
+      username: finalUserData.username,
+      avatar: finalUserData.avatar,
+      role: finalUserData.role
+    });
 
     // Enviar lista actualizada a todos
-    io.emit("users:update", usersList);
+    io.emit("users:update", allUsers);
   });
 
-  // ✅ Solicitud de lista de usuarios
+  // ✅ Solicitud de lista de usuarios (incluye online + offline)
   socket.on("users:request", () => {
-    const usersList = Array.from(connectedUsers.values());
-    socket.emit("users:list", usersList);
-    logger.debug(`Lista de usuarios enviada: ${usersList.length} usuarios`);
+    const allUsers = getAllUsers();
+    socket.emit("users:list", allUsers);
+    logger.debug(`Lista completa de usuarios enviada: ${allUsers.length} usuarios (${connectedUsers.size} online)`);
   });
 
   // User joins channel
@@ -478,23 +600,32 @@ io.on("connection", (socket) => {
     if (user) {
       logger.user(`Desconectado: ${user.username} (${socket.id})`);
       
-      // Eliminar usuario
+      // Actualizar lastSeen del usuario registrado
+      if (user.ipHash) {
+        const registeredUser = registeredUsers[user.ipHash];
+        if (registeredUser) {
+          registeredUser.lastSeen = new Date().toISOString();
+          saveRegisteredUsers();
+        }
+      }
+      
+      // Eliminar de usuarios conectados
       connectedUsers.delete(socket.id);
 
-      // Liberar username
+      // Liberar username (ya no es necesario mantenerlo bloqueado)
       usedUsernames.delete(user.username);
 
-      // Notificar a todos
-      io.emit("user:left", { 
+      // Notificar a todos que el usuario se desconectó (pero sigue existiendo offline)
+      io.emit("user:offline", { 
         userId: user.id, 
         username: user.username 
       });
 
-      // Enviar lista actualizada
-      const usersList = Array.from(connectedUsers.values());
-      io.emit("users:update", usersList);
+      // Enviar lista actualizada con todos los usuarios (online + offline)
+      const allUsers = getAllUsers();
+      io.emit("users:update", allUsers);
       
-      logger.debug(`Usuarios restantes: ${usersList.length}`);
+      logger.debug(`Usuario offline, total usuarios registrados: ${Object.keys(registeredUsers).length}`);
     } else {
       logger.debug(`Usuario desconectado (no registrado): ${socket.id}`);
     }
