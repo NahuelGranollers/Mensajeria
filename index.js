@@ -4,6 +4,10 @@ const { Server } = require("socket.io");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const axios = require("axios");
+const session = require("express-session");
+const cookieParser = require("cookie-parser");
+require("dotenv").config({ path: ".env.server" });
 
 // ✅ Sistema de Logs Profesional
 const COLORS = {
@@ -78,10 +82,26 @@ const logger = {
 
 const app = express();
 const server = http.createServer(app);
+
+// ✅ Middleware
+app.use(express.json());
+app.use(cookieParser());
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-super-secret-key-change-this',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // true en producción (HTTPS)
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 días
+  }
+}));
+
 const io = new Server(server, {
   cors: {
     origin: [
       "https://unaspartidillasgang.online",
+      "https://unaspartidillas.online",
       "http://localhost:5173"
     ],
     methods: ["GET", "POST"],
@@ -274,6 +294,104 @@ setInterval(() => {
     }
   }
 }, 300000);
+
+// ===============================================
+// 🔐 Discord OAuth2 Routes (Authorization Code Flow)
+// ===============================================
+
+// Ruta 1: Iniciar OAuth - Redirige al usuario a Discord
+app.get("/auth/discord", (req, res) => {
+  const redirectUri = process.env.DISCORD_REDIRECT_URI;
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const scope = "identify";
+  
+  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}`;
+  
+  logger.info(`🔐 Redirecting to Discord OAuth: ${discordAuthUrl}`);
+  res.redirect(discordAuthUrl);
+});
+
+// Ruta 2: Callback de Discord - Intercambia el code por el token
+app.get("/auth/callback", async (req, res) => {
+  const { code } = req.query;
+  
+  if (!code) {
+    logger.error("❌ No authorization code received from Discord");
+    return res.status(400).send("Authorization failed: No code provided");
+  }
+
+  try {
+    logger.info("🔄 Exchanging authorization code for access token...");
+    
+    // Intercambiar code por access_token
+    const tokenResponse = await axios.post(
+      "https://discord.com/api/oauth2/token",
+      new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID,
+        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        code: code,
+        grant_type: "authorization_code",
+        redirect_uri: process.env.DISCORD_REDIRECT_URI,
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+
+    const { access_token } = tokenResponse.data;
+    logger.success("✅ Access token obtained successfully");
+
+    // Obtener información del usuario de Discord
+    const userResponse = await axios.get("https://discord.com/api/users/@me", {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+      },
+    });
+
+    const discordUser = userResponse.data;
+    logger.user(`👤 Discord user authenticated: ${discordUser.username}#${discordUser.discriminator} (ID: ${discordUser.id})`);
+
+    // Guardar usuario en sesión
+    req.session.discordUser = {
+      id: discordUser.id,
+      username: discordUser.username,
+      discriminator: discordUser.discriminator,
+      avatar: discordUser.avatar,
+      accessToken: access_token,
+    };
+
+    // Redirigir al frontend con éxito
+    res.redirect(`/?auth=success`);
+  } catch (error) {
+    logger.error("❌ Discord OAuth error:", error.response?.data || error.message);
+    res.status(500).send("Authentication failed");
+  }
+});
+
+// Ruta 3: Obtener usuario autenticado
+app.get("/auth/user", (req, res) => {
+  if (!req.session.discordUser) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  res.json(req.session.discordUser);
+});
+
+// Ruta 4: Logout
+app.post("/auth/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      logger.error("❌ Error destroying session:", err);
+      return res.status(500).json({ error: "Logout failed" });
+    }
+    
+    res.clearCookie("connect.sid");
+    logger.info("👋 User logged out successfully");
+    res.json({ success: true });
+  });
+});
 
 io.on("connection", (socket) => {
   const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
