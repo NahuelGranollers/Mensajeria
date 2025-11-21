@@ -348,17 +348,21 @@ io.on("connection", (socket) => {
           avatar: BOT_USER.avatar,
           content: text,
           timestamp: new Date().toISOString(),
-          isSystem: false,
-          role: 'bot'
+          isSystem: false
         };
 
-        // Simular tiempo de escritura (opcional, pero da realismo)
+        // Simular tiempo de escritura y luego guardar + emitir
         setTimeout(async () => {
           try {
+            // ✅ Guardar primero en DB
             await db.saveMessage(botMessage);
+            // ✅ Luego emitir a los clientes
             io.to(message.channelId).emit("message:received", botMessage);
+            logger.message(`Bot respondió en ${message.channelId}`);
           } catch (err) {
             logger.error("Error guardando mensaje del bot:", err);
+            // Emitir de todos modos para que el usuario vea la respuesta
+            io.to(message.channelId).emit("message:received", botMessage);
           }
         }, 1500);
 
@@ -374,9 +378,15 @@ io.on("connection", (socket) => {
           avatar: BOT_USER.avatar,
           content: "Lo siento, mis circuitos están un poco fritos ahora mismo. Inténtalo más tarde. 🤖💥",
           timestamp: new Date().toISOString(),
-          isSystem: false,
-          role: 'bot'
+          isSystem: false
         };
+
+        // ✅ Guardar mensaje de error también
+        try {
+          await db.saveMessage(errorMessage);
+        } catch (dbErr) {
+          logger.error("Error guardando mensaje de error del bot:", dbErr);
+        }
 
         io.to(message.channelId).emit("message:received", errorMessage);
       }
