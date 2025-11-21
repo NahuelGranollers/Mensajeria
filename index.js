@@ -487,10 +487,61 @@ app.get("/auth/callback", catchAsync(async (req, res) => {
   const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
   const redirectUrl = `${frontendUrl}/?auth=success`;
   
-  logger.info(`🔄 Redirecting to frontend: ${frontendUrl}`);
+  logger.info(`🔄 Redirecting to frontend: ${redirectUrl}`);
   logger.success(`✅ Session saved for user: ${discordUser.username}`);
   
-  res.redirect(redirectUrl);
+  // Redirección con HTML meta refresh como fallback
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta http-equiv="refresh" content="0;url=${redirectUrl}">
+      <title>Redirigiendo...</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          margin: 0;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+        .container {
+          text-align: center;
+        }
+        .spinner {
+          border: 4px solid rgba(255, 255, 255, 0.3);
+          border-top: 4px solid white;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin: 20px auto;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>✅ Autenticación exitosa</h1>
+        <div class="spinner"></div>
+        <p>Redirigiendo a UPG...</p>
+        <p><small>Si no se redirige automáticamente, <a href="${redirectUrl}" style="color: white;">haz clic aquí</a></small></p>
+      </div>
+      <script>
+        setTimeout(() => {
+          window.location.href = "${redirectUrl}";
+        }, 500);
+      </script>
+    </body>
+    </html>
+  `);
 }));
 
 // Ruta 3: Obtener usuario autenticado
