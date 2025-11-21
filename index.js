@@ -12,7 +12,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Inicializar Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // ✅ Importar capa de base de datos
 const db = require('./db');
@@ -327,59 +327,109 @@ io.on("connection", (socket) => {
     // Emitir a todos en el canal
     io.to(message.channelId).emit("message:received", message);
 
-    // 🤖 Lógica del Bot (Gemini)
+    // 🤖 Lógica del Bot (Respuestas Agresivas)
     if (message.content.toLowerCase().includes('@upg')) {
-      try {
-        // Prompt para el bot
-        const prompt = `Eres UPG, un asistente útil y divertido para la comunidad de gamers "United Player Group". 
-        El usuario ${message.username} dice: "${message.content}". 
-        Responde de manera concisa y amigable (máximo 200 caracteres si es posible).`;
+      const text = message.content.toLowerCase();
+      let botResponse = '';
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
-
-        // Crear mensaje del bot
-        const botMessage = {
-          id: crypto.randomUUID(),
-          channelId: message.channelId,
-          userId: 'bot',
-          username: 'UPG',
-          avatar: BOT_USER.avatar,
-          content: text,
-          timestamp: new Date().toISOString(),
-          isSystem: false,
-          role: 'bot'
-        };
-
-        // Simular tiempo de escritura (opcional, pero da realismo)
-        setTimeout(async () => {
-          try {
-            await db.saveMessage(botMessage);
-            io.to(message.channelId).emit("message:received", botMessage);
-          } catch (err) {
-            logger.error("Error guardando mensaje del bot:", err);
-          }
-        }, 1500);
-
-      } catch (error) {
-        logger.error("Error con Gemini:", error);
-
-        // Mensaje de error amigable
-        const errorMessage = {
-          id: crypto.randomUUID(),
-          channelId: message.channelId,
-          userId: 'bot',
-          username: 'UPG',
-          avatar: BOT_USER.avatar,
-          content: "Lo siento, mis circuitos están un poco fritos ahora mismo. Inténtalo más tarde. 🤖💥",
-          timestamp: new Date().toISOString(),
-          isSystem: false,
-          role: 'bot'
-        };
-
-        io.to(message.channelId).emit("message:received", errorMessage);
+      // Respuestas agresivas según palabras clave
+      if (text.includes('hola') || text.includes('hey') || text.includes('buenas')) {
+        const greetings = [
+          '¿Qué pasa, maricón? ¿Ya te preparaste para que te destroce?',
+          'Hola subnormal, ¿vienes a perder otra vez?',
+          '¿Buenas? Las tendrás cuando aprendas a jugar, pringado',
+          'Ey, otra vez tú... menuda pesadilla',
+          '¿Qué hay, payaso? ¿Listo para hacer el ridículo?'
+        ];
+        botResponse = greetings[Math.floor(Math.random() * greetings.length)];
+      } 
+      else if (text.includes('como estas') || text.includes('que tal') || text.includes('todo bien')) {
+        const statusReplies = [
+          'Mejor que tú seguro, capullo',
+          'De puta madre esperando a que alguien me dé competencia de verdad',
+          'Bien, pero tú me caes como una patada en los huevos',
+          'Aquí, aburrido de ver cómo juegas como el culo',
+          'Todo perfecto hasta que apareciste tú, subnormal'
+        ];
+        botResponse = statusReplies[Math.floor(Math.random() * statusReplies.length)];
       }
+      else if (text.includes('ayuda') || text.includes('help') || text.includes('comandos')) {
+        const helpReplies = [
+          '¿Ayuda? Lo que necesitas es aprender a jugar, pringado',
+          'No hay comandos para dejar de ser un inútil, maricón',
+          'La única ayuda que necesitas es un tutorial para no ser tan malo',
+          'Ayuda: deja de joder y ponte a entrenar, subnormal'
+        ];
+        botResponse = helpReplies[Math.floor(Math.random() * helpReplies.length)];
+      }
+      else if (text.includes('gracias') || text.includes('thanks')) {
+        const thanks = [
+          'Sí, sí, lo que tú digas, pesado',
+          'De nada, pero sigues siendo un paquete',
+          'Vale, ahora lárgate',
+          'No me las des, todavía juegas como una mierda'
+        ];
+        botResponse = thanks[Math.floor(Math.random() * thanks.length)];
+      }
+      else if (text.includes('quien sos') || text.includes('quien eres') || text.includes('que sos')) {
+        botResponse = 'Soy UPG, el bot que te va a humillar cada vez que abras la boca, subnormal';
+      }
+      else if (text.includes('callate') || text.includes('cállate') || text.includes('shut')) {
+        const shutupReplies = [
+          '¿Callarme yo? Primero aprende a jugar, capullo',
+          'Tú cállate y deja de llorar, maricón',
+          'Haz el favor de callar tú, que das vergüenza ajena',
+          'Cierra el pico, pringado'
+        ];
+        botResponse = shutupReplies[Math.floor(Math.random() * shutupReplies.length)];
+      }
+      else if (text.includes('jugar') || text.includes('partida') || text.includes('game')) {
+        const gameReplies = [
+          '¿Jugar? ¿Contigo? Prefiero ver paint secarse',
+          'Vale, pero prepárate para que te haga llorar, subnormal',
+          'Juega solo, que conmigo vas a sufrir',
+          'Una partida para humillarte, me apunto'
+        ];
+        botResponse = gameReplies[Math.floor(Math.random() * gameReplies.length)];
+      }
+      else {
+        // Respuestas genéricas agresivas
+        const genericReplies = [
+          '¿Qué coño quieres ahora, pesado?',
+          'Déjame en paz, maricón',
+          'Otra vez con tus gilipolleces...',
+          '¿No tienes nada mejor que hacer, subnormal?',
+          'Vete a la mierda, anda',
+          'Me tienes hasta los huevos',
+          'Qué puto coñazo eres',
+          'Eres más pesado que una piedra en el zapato',
+          'Joder, qué plasta'
+        ];
+        botResponse = genericReplies[Math.floor(Math.random() * genericReplies.length)];
+      }
+
+      // Crear mensaje del bot
+      const botMessage = {
+        id: crypto.randomUUID(),
+        channelId: message.channelId,
+        userId: 'bot',
+        username: 'UPG',
+        avatar: BOT_USER.avatar,
+        content: botResponse,
+        timestamp: new Date().toISOString(),
+        isSystem: false,
+        role: 'bot'
+      };
+
+      // Simular tiempo de escritura
+      setTimeout(async () => {
+        try {
+          await db.saveMessage(botMessage);
+          io.to(message.channelId).emit("message:received", botMessage);
+        } catch (err) {
+          logger.error("Error guardando mensaje del bot:", err);
+        }
+      }, 1500);
     }
   });
 
