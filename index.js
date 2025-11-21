@@ -20,6 +20,11 @@ const db = require('./db');
 // Inicializar DB
 db.initDB();
 
+// Asegurar que el bot existe en la DB
+setTimeout(() => {
+  db.saveUser(BOT_USER).catch(err => console.error('❌ Error guardando bot en DB:', err));
+}, 1000);
+
 // ✅ Configuración de Admin
 const ADMIN_DISCORD_ID = '368377018372456459'; // ID fijo del admin
 
@@ -349,8 +354,12 @@ io.on("connection", (socket) => {
 
         // Simular tiempo de escritura (opcional, pero da realismo)
         setTimeout(async () => {
-          await db.saveMessage(botMessage);
-          io.to(message.channelId).emit("message:received", botMessage);
+          try {
+            await db.saveMessage(botMessage);
+            io.to(message.channelId).emit("message:received", botMessage);
+          } catch (err) {
+            logger.error("Error guardando mensaje del bot:", err);
+          }
         }, 1500);
 
       } catch (error) {
