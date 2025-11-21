@@ -404,7 +404,12 @@ app.get("/auth/callback", async (req, res) => {
 
     // Redirigir al frontend con los datos del usuario
     const frontendUrl = process.env.FRONTEND_URL || 'https://unaspartidillas.online';
-    res.redirect(`${frontendUrl}/?auth=success&user=${userDataEncoded}`);
+    const redirectUrl = `${frontendUrl}/?auth=success&user=${userDataEncoded}`;
+    
+    logger.info(`🔄 Redirecting to frontend: ${frontendUrl}`);
+    logger.info(`👤 User data encoded (length): ${userDataEncoded.length} chars`);
+    
+    res.redirect(redirectUrl);
   } catch (error) {
     logger.error("❌ Discord OAuth error:", error.response?.data || error.message);
     res.status(500).send("Authentication failed");
