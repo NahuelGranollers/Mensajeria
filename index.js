@@ -7,7 +7,7 @@ const crypto = require("crypto");
 const axios = require("axios");
 const session = require("express-session");
 const cookieParser = require("cookie-parser");
-require("dotenv").config({ path: ".env.server" });
+require("dotenv").config(); // Carga .env en la carpeta server
 
 // ✅ Sistema de Logs Profesional
 const COLORS = {
