@@ -27,15 +27,15 @@ const connectedUsers = new Map();
 // ✅ Set de usernames en uso (para evitar duplicados)
 const usedUsernames = new Set();
 
-// ✅ IP del administrador cifrada con SHA-256
 // El servidor detecta la IP del cliente, la hashea y la compara con este valor
 // Si coincide, automáticamente se asignan permisos de administrador
 const ADMIN_IP_HASH = '44273c5917d79833c51420afd84a77cef89743c63a44b3c07742ee59d9cde94a';
 
-// Función para hashear IP con SHA-256
 function hashIP(ip) {
   if (!ip) return null;
-  const cleanIp = ip.replace('::ffff:', '').trim();
+  // Si viene una lista de IPs separadas por comas (proxy/CDN), tomar solo la primera
+  const firstIp = ip.split(',')[0].trim();
+  const cleanIp = firstIp.replace('::ffff:', '').trim();
   return crypto.createHash('sha256').update(cleanIp).digest('hex');
 }
 
