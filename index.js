@@ -121,7 +121,7 @@ app.use(session({
     httpOnly: true,
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' para cross-domain
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días
-    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // Allow subdomain cookies
+    // No establecer domain para permitir cookies cross-domain con diferentes dominios
   },
   proxy: true // Trust proxy headers (Render uses proxies)
 }));
@@ -490,18 +490,17 @@ app.get("/auth/callback", catchAsync(async (req, res) => {
 
 // Ruta 3: Obtener usuario autenticado
 app.get("/auth/user", (req, res) => {
-  logger.debug(`📥 === GET /auth/user ===`);
-  logger.debug(`🔍 Session ID: ${req.sessionID}`);
-  logger.debug(`🔍 Session:`, JSON.stringify(req.session, null, 2));
-  logger.debug(`🔍 Cookies:`, req.cookies);
+  logger.debug(`Auth check - Session ID: ${req.sessionID}`);
+  logger.debug(`Auth check - Cookies: ${JSON.stringify(req.cookies)}`);
+  logger.debug(`Auth check - Session exists: ${!!req.session}`);
+  logger.debug(`Auth check - Discord user in session: ${!!req.session?.discordUser}`);
   
   if (!req.session.discordUser) {
-    logger.warning(`❌ No Discord user in session`);
+    logger.warning(`❌ No Discord user in session for session ID: ${req.sessionID}`);
     return res.status(401).json({ error: "Not authenticated" });
   }
   
-  logger.success(`✅ Discord user found in session: ${req.session.discordUser.username}`);
-  logger.debug(`📤 Sending user data:`, JSON.stringify(req.session.discordUser, null, 2));
+  logger.info(`✅ Discord user session found: ${req.session.discordUser.username}`);
   res.json(req.session.discordUser);
 });
 
@@ -559,11 +558,7 @@ io.on("connection", (socket) => {
 
   // ✅ Usuario se registra
   socket.on("user:join", (userData) => {
-    logger.debug(`📥 === user:join recibido ===`);
-    logger.debug(`🔍 Datos del usuario:`, JSON.stringify(userData, null, 2));
-    logger.debug(`🔍 Socket ID: ${socket.id}`);
-    logger.debug(`🔍 Client IP: ${clientIp}`);
-    logger.debug(`🔍 IP Hash: ${ipHash?.substring(0, 16)}...`);
+    logger.debug(`user:join: ${userData.username} (${socket.id})`);
     
     // Verificar si está baneado
     if (isBanned(userData.id, clientIp)) {
@@ -575,16 +570,11 @@ io.on("connection", (socket) => {
     }
 
     // ✅ Verificar si este IP ya tiene usuario registrado
-    logger.debug(`🔍 Buscando usuario por IP hash...`);
     const existingUser = getUserByIP(ipHash);
-    logger.debug(`🔍 Usuario existente encontrado:`, existingUser ? JSON.stringify(existingUser, null, 2) : 'null');
-    
     let finalUserData;
     let isNewUser = false;
 
     if (existingUser) {
-      // Usuario existente - recuperar datos guardados (nombre y avatar)
-      logger.debug(`♻️ Usuario existente detectado, recuperando datos...`);
       finalUserData = {
         id: existingUser.id,
         username: existingUser.username,
@@ -596,36 +586,25 @@ io.on("connection", (socket) => {
         online: true,
         connectedAt: new Date().toISOString()
       };
-      
-      logger.user(`Usuario existente reconectado: ${existingUser.username} (${socket.id})`);
-      logger.debug(`🔍 finalUserData:`, JSON.stringify(finalUserData, null, 2));
+      logger.user(`Usuario reconectado: ${existingUser.username}`);
     } else {
       // Usuario nuevo - verificar que el username no esté en uso
-      logger.debug(`✨ Usuario nuevo detectado, validando username...`);
       const normalizedUsername = userData.username.toLowerCase().trim();
-      logger.debug(`🔍 Username normalizado: ${normalizedUsername}`);
-      logger.debug(`🔍 Usernames en uso:`, Array.from(usedUsernames));
-      
       const alreadyExists = Array.from(usedUsernames).some(
         name => name.toLowerCase() === normalizedUsername
       );
 
       if (alreadyExists) {
-        logger.warning(`Intento de registro con username duplicado: ${userData.username}`);
+        logger.warning(`Username duplicado: ${userData.username}`);
         socket.emit("username:taken", { 
           message: "Este nombre de usuario ya está en uso." 
         });
         socket.disconnect(true);
         return;
       }
-      
-      logger.debug(`✅ Username disponible`);
 
-      // Detectar si es admin por IP
-      logger.debug(`🔍 Verificando si es admin...`);
       const isAdmin = isAdminIP(clientIp);
       const userRole = isAdmin ? 'admin' : 'user';
-      logger.debug(`🔍 Es admin: ${isAdmin}, Rol: ${userRole}`);
 
       finalUserData = {
         ...userData,
@@ -638,54 +617,30 @@ io.on("connection", (socket) => {
       };
 
       isNewUser = true;
-      logger.user(`Usuario nuevo registrado: ${userData.username} (${socket.id}) - Rol: ${userRole}`);
-      logger.debug(`🔍 finalUserData:`, JSON.stringify(finalUserData, null, 2));
+      logger.user(`Nuevo usuario: ${userData.username} - ${userRole}`);
     }
 
-    // Agregar username al set de usados
-    logger.debug(`💾 Agregando username a usedUsernames...`);
     usedUsernames.add(finalUserData.username);
-    logger.debug(`🔍 Total usernames en uso: ${usedUsernames.size}`);
-
-    // Guardar en connectedUsers
-    logger.debug(`💾 Guardando en connectedUsers...`);
     connectedUsers.set(socket.id, finalUserData);
-    logger.debug(`🔍 Total usuarios conectados: ${connectedUsers.size}`);
-
-    // Guardar permanentemente en users.json
-    logger.debug(`💾 Guardando en users.json...`);
     registerUser(ipHash, {
       id: finalUserData.id,
       username: finalUserData.username,
       avatar: finalUserData.avatar,
       role: finalUserData.role
     });
-    logger.debug(`🔍 Total usuarios registrados: ${Object.keys(registeredUsers).length}`);
 
-    // Iniciar heartbeat para este usuario
-    logger.debug(`❤️ Iniciando heartbeat...`);
     startHeartbeat();
 
-    // Enviar rol actualizado al usuario si es admin
     if (finalUserData.role === 'admin') {
-      logger.debug(`📤 Emitiendo role:updated (admin)...`);
       socket.emit("role:updated", { role: 'admin' });
-      logger.admin(`ADMIN DETECTADO - ${finalUserData.username}`);
+      logger.admin(`Admin conectado: ${finalUserData.username}`);
     }
 
-    // Enviar confirmación al usuario con sus datos finales
-    logger.debug(`📤 Emitiendo user:registered...`);
-    logger.debug(`🔍 Datos enviados:`, JSON.stringify(finalUserData, null, 2));
     socket.emit("user:registered", finalUserData);
 
-    // Enviar lista completa de TODOS los usuarios (online + offline)
     const allUsers = getAllUsers();
-    logger.debug(`📤 Emitiendo users:list (${allUsers.length} usuarios)...`);
-    logger.debug(`🔍 Usuarios:`, allUsers.map(u => ({ id: u.id, username: u.username, online: u.online })));
     socket.emit("users:list", allUsers);
 
-    // Notificar a todos que este usuario se conectó
-    logger.debug(`📢 Broadcasting user:online...`);
     io.emit("user:online", { 
       userId: finalUserData.id, 
       username: finalUserData.username,
@@ -693,11 +648,7 @@ io.on("connection", (socket) => {
       role: finalUserData.role
     });
 
-    // Enviar lista actualizada a todos
-    logger.debug(`📢 Broadcasting users:update...`);
     io.emit("users:update", allUsers);
-    
-    logger.success(`✅ === user:join completado para ${finalUserData.username} ===`);
   });
 
   // ✅ Solicitud de lista de usuarios (incluye online + offline)
