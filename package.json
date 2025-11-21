@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^1.30.0",
+    "@google/generative-ai": "^0.21.0",
     "@tailwindcss/vite": "^4.1.17",
     "axios": "^1.13.2",
     "better-sqlite3": "^12.4.5",

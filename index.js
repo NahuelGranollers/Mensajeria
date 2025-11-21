@@ -8,7 +8,7 @@ const axios = require("axios");
 const session = require("express-session");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
-const { GoogleGenerativeAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Inicializar Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
