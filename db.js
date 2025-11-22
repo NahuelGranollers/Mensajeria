@@ -223,14 +223,22 @@ module.exports = {
       isSystem: !!is_system
     };
   },
-  // Limpieza de mensajes de canal
+  // Limpieza de mensajes de canal o todos los mensajes
   async clearChannelMessages(channelId) {
     if (type === 'sqlite') {
-      db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
+      if (channelId) {
+        db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
+      } else {
+        db.prepare('DELETE FROM messages').run();
+      }
     } else {
-      await db.query('DELETE FROM messages WHERE channel_id = $1', [channelId]);
+      if (channelId) {
+        await db.query('DELETE FROM messages WHERE channel_id = $1', [channelId]);
+      } else {
+        await db.query('DELETE FROM messages');
+      }
     }
-  },
+  }
   // Banear usuario (stub, debe implementarse persistencia real)
   async banUser(userId) {
     // Aquí se debería guardar el baneo en una tabla o archivo

@@ -405,6 +405,19 @@ io.on("connection", (socket) => {
           logger.admin(`Canal ${safeChannelId} limpiado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
         });
 
+        // 🔒 Admin: Limpiar todos los mensajes de todos los canales
+        socket.on("admin:clear-all-messages", async (data) => {
+          const { adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de limpiar todos los mensajes por usuario no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          // Limpiar todos los mensajes de todos los canales
+          await db.clearChannelMessages(); // Modifica clearChannelMessages para limpiar todos si no se pasa channelId
+          io.emit("channel:history", { channelId: null, messages: [] });
+          logger.admin(`Todos los mensajes de todos los canales han sido eliminados por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+        });
+
         // 🔒 Admin: Banear usuario
         socket.on("admin:ban-user", async (data) => {
           const { userId, username, adminId } = data;
