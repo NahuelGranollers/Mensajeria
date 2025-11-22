@@ -224,7 +224,7 @@ module.exports = {
     };
   },
   // Limpieza de mensajes de canal o todos los mensajes
-  async clearChannelMessages(channelId) {
+  clearChannelMessages: async function(channelId) {
     if (type === 'sqlite') {
       if (channelId) {
         db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
@@ -238,9 +238,9 @@ module.exports = {
         await db.query('DELETE FROM messages');
       }
     }
-  }
+  },
   // Banear usuario (stub, debe implementarse persistencia real)
-  async banUser(userId) {
+  banUser: async function(userId) {
     // Aquí se debería guardar el baneo en una tabla o archivo
     // Por ahora solo stub
     if (type === 'sqlite') {
@@ -250,7 +250,7 @@ module.exports = {
     }
   },
   // Migración de datos (stub)
-  async migrate() {
+  migrate: async function() {
     // Implementar lógica de migración si se requiere
     return true;
   }
