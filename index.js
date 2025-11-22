@@ -636,7 +636,9 @@ io.on('connection', socket => {
       setTimeout(async () => {
         try {
           await db.saveMessage(botMessage);
+          logger.info(`Enviando respuesta del bot: ${botResponse}`);
           io.to(message.channelId).emit('message:received', db.sanitizeMessageOutput(botMessage));
+          logger.info(`Mensaje del bot enviado al canal ${message.channelId}`);
         } catch (err) {
           logger.error('Error guardando mensaje del bot:', err);
         }
