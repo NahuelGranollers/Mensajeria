@@ -636,13 +636,13 @@ io.on('connection', socket => {
       setTimeout(async () => {
         try {
           await db.saveMessage(botMessage);
-          logger.info(`Enviando respuesta del bot: ${botResponse}`);
+          console.log('SERVIDOR: Enviando respuesta del bot:', botResponse);
           io.to(message.channelId).emit('message:received', db.sanitizeMessageOutput(botMessage));
-          logger.info(`Mensaje del bot enviado al canal ${message.channelId}`);
+          console.log('SERVIDOR: Mensaje del bot enviado al canal', message.channelId);
         } catch (err) {
           logger.error('Error guardando mensaje del bot:', err);
         }
-      }, 1500);
+      }, 1000); // Reducido a 1 segundo para testing
     }
   });
 
