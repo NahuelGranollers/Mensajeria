@@ -1,3 +1,11 @@
+// Eliminar mensaje por id
+async function deleteMessage(messageId) {
+  if (type === 'sqlite') {
+    db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
+  } else {
+    await db.query('DELETE FROM messages WHERE id = $1', [messageId]);
+  }
+}
 const Database = require('better-sqlite3');
 const { Pool } = require('pg');
 const path = require('path');
@@ -192,6 +200,7 @@ module.exports = {
   getUser,
   saveMessage,
   getChannelHistory,
+  deleteMessage,
   // Protección de datos: eliminar datos sensibles antes de enviar al frontend
   sanitizeUserOutput: function(user) {
     if (!user) return null;

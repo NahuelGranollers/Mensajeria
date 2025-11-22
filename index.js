@@ -400,7 +400,6 @@ io.on("connection", (socket) => {
             return;
           }
           const safeChannelId = sanitizeMessage(channelId);
-          // Eliminar mensajes del canal en DB
           await db.clearChannelMessages(safeChannelId);
           io.to(safeChannelId).emit("channel:history", { channelId: safeChannelId, messages: [] });
           logger.admin(`Canal ${safeChannelId} limpiado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
@@ -415,11 +414,9 @@ io.on("connection", (socket) => {
           }
           const safeUserId = sanitizeMessage(userId);
           const safeUsername = sanitizeMessage(username);
-          // Banear usuario en DB y memoria
           await db.banUser(safeUserId);
           io.emit("admin:user-banned", { userId: safeUserId, username: safeUsername });
           logger.admin(`Usuario ${safeUsername} (${safeUserId ? safeUserId.slice(0, 6) + '...' : 'N/A'}) baneado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
-          // Desconectar si está online
           for (const [sid, user] of connectedUsers.entries()) {
             if (user.id === safeUserId) {
               const targetSocket = io.sockets.sockets.get(sid);
@@ -439,13 +436,72 @@ io.on("connection", (socket) => {
           const safeUsername = sanitizeMessage(username);
           io.emit("admin:user-kicked", { userId: safeUserId, username: safeUsername });
           logger.admin(`Usuario ${safeUsername} (${safeUserId ? safeUserId.slice(0, 6) + '...' : 'N/A'}) expulsado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
-          // Desconectar si está online
           for (const [sid, user] of connectedUsers.entries()) {
             if (user.id === safeUserId) {
               const targetSocket = io.sockets.sockets.get(sid);
               if (targetSocket) targetSocket.disconnect(true);
             }
           }
+        });
+
+        // 🔒 Admin: Eliminar mensaje
+        socket.on("admin:delete-message", async (data) => {
+          const { messageId, channelId, adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de eliminar mensaje por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          // Eliminar mensaje de la DB
+          await db.deleteMessage(messageId);
+          // Enviar nuevo historial al canal
+          const history = await db.getChannelHistory(channelId);
+          io.to(channelId).emit("channel:history", { channelId, messages: history.map(db.sanitizeMessageOutput) });
+          logger.admin(`Mensaje ${messageId} eliminado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+        });
+
+        // 🔒 Admin: Silenciar usuario
+        socket.on("admin:silence-user", async (data) => {
+          const { userId, adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de silenciar usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          io.emit("admin:user-silenced", { userId });
+          logger.admin(`Usuario ${userId} silenciado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+        });
+
+        // 🔒 Admin: Cambiar color de usuario
+        socket.on("admin:change-color", async (data) => {
+          const { userId, color, adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de cambiar color por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          io.emit("admin:user-color-changed", { userId, color });
+          logger.admin(`Color de usuario ${userId} cambiado a ${color} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+        });
+
+        // 🔒 Admin: Mensaje global
+        socket.on("admin:global-message", async (data) => {
+          const { content, adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de mensaje global por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          // Emitir a todos los canales
+          io.emit("admin:global-message", { content });
+          logger.admin(`Mensaje global enviado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+        });
+
+        // 🔒 Admin: Modo troll
+        socket.on("admin:troll-mode", async (data) => {
+          const { userId, adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de modo troll por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          io.emit("admin:user-troll", { userId });
+          logger.admin(`Modo troll activado para usuario ${userId} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
         });
         botResponse = statusReplies[Math.floor(Math.random() * statusReplies.length)];
       }
