@@ -159,6 +159,13 @@ const io = new Server(server, {
 // ✅ Map de usuarios conectados (socketId -> userData)
 // const connectedUsers = new Map(); // YA DEFINIDO ARRIBA
 
+// ✅ Utility function for async error handling
+const catchAsync = (fn) => {
+  return (req, res, next) => {
+    fn(req, res, next).catch(next);
+  };
+};
+
 // ===============================================
 // 🔐 Discord OAuth2 Routes
 // ===============================================
@@ -685,6 +692,6 @@ io.on('connection', socket => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  logger.server(`Servidor corriendo en puerto ${PORT}`);
+  logger.info(`Servidor corriendo en puerto ${PORT}`);
   logger.info(`Admin ID configurado: ${ADMIN_DISCORD_ID}`);
 });
