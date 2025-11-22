@@ -134,6 +134,9 @@ app.use(
     resave: false,
     saveUninitialized: false,
     name: 'upg.sid',
+    // WARNING: MemoryStore is not suitable for production!
+    // For production, use a proper session store like connect-redis or connect-session-sequelize
+    // Example: store: new RedisStore({ client: redisClient })
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
