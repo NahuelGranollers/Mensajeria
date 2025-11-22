@@ -75,6 +75,7 @@ NODE_ENV=development
 ## 📡 Endpoints
 
 ### OAuth Routes
+
 - `GET /auth/discord` - Inicia OAuth
 - `GET /auth/callback` - Callback de Discord
 - `GET /auth/user` - Obtener usuario actual
@@ -82,11 +83,13 @@ NODE_ENV=development
 - `GET /auth/debug` - Debug de configuración (eliminar en prod)
 
 ### Socket.IO Events
+
 Ver `index.js` para lista completa de eventos Socket.IO
 
 ## 🔄 Updates
 
 Para actualizar el servidor en Render:
+
 1. Haz commit de tus cambios
 2. Push a GitHub
 3. Render detectará los cambios automáticamente
@@ -95,6 +98,7 @@ Para actualizar el servidor en Render:
 ## 📊 Logs
 
 El servidor usa un sistema de logs con colores:
+
 - 🚀 Server events
 - 🔌 Socket connections
 - 👤 User actions
@@ -106,13 +110,16 @@ El servidor usa un sistema de logs con colores:
 ## 🆘 Troubleshooting
 
 ### Error: State parameter mismatch
+
 - Verifica que las cookies funcionen en HTTPS
 - Comprueba `sameSite: 'none'` y `secure: true`
 
 ### Error: Cannot find module
+
 - Ejecuta `npm install` en la carpeta server
 
 ### Usuario no persiste después de login
+
 - Revisa los logs de Render
 - Verifica que SESSION_SECRET esté configurado
 - Comprueba que las cookies se estén enviando

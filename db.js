@@ -27,8 +27,8 @@ function initDB() {
     db = new Pool({
       connectionString: dbUrl,
       ssl: {
-        rejectUnauthorized: false // Necesario para Render
-      }
+        rejectUnauthorized: false, // Necesario para Render
+      },
     });
   } else {
     // Desarrollo: SQLite
@@ -57,7 +57,7 @@ async function createTables() {
       last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );`,
-    
+
     // Tabla de Mensajes
     `CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -68,7 +68,7 @@ async function createTables() {
       content TEXT NOT NULL,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_system BOOLEAN DEFAULT 0
-    );`
+    );`,
   ];
 
   try {
@@ -80,13 +80,16 @@ async function createTables() {
       try {
         for (const query of queries) {
           // Ajustes para Postgres (BOOLEAN 0/1 -> TRUE/FALSE es automático en muchos casos pero mejor ser explícito si falla, por ahora estándar SQL)
-          // Postgres usa TRUE/FALSE para boolean, SQLite 0/1. 
+          // Postgres usa TRUE/FALSE para boolean, SQLite 0/1.
           // Ajustamos la query de mensajes para Postgres si es necesario, pero el driver suele manejarlo.
           // Sin embargo, 'DEFAULT 0' para boolean en Postgres puede fallar si la columna es BOOLEAN estricto.
           // Vamos a normalizar la query de mensajes para Postgres.
           let pgQuery = query;
           if (query.includes('is_system BOOLEAN DEFAULT 0')) {
-             pgQuery = query.replace('is_system BOOLEAN DEFAULT 0', 'is_system BOOLEAN DEFAULT FALSE');
+            pgQuery = query.replace(
+              'is_system BOOLEAN DEFAULT 0',
+              'is_system BOOLEAN DEFAULT FALSE'
+            );
           }
           await client.query(pgQuery);
         }
@@ -105,7 +108,7 @@ async function createTables() {
 // Guardar o actualizar usuario
 async function saveUser(user) {
   const { id, username, avatar, role, status } = user;
-  
+
   if (type === 'sqlite') {
     const stmt = db.prepare(`
       INSERT INTO users (id, username, avatar, role, status, last_seen)
@@ -169,14 +172,23 @@ async function getChannelHistory(channelId, limit = 50) {
   // Limitar máximo a 200 mensajes por petición para evitar cuellos de botella
   const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 200));
   if (type === 'sqlite') {
-    const msgs = db.prepare(`
+    const msgs = db
+      .prepare(
+        `
       SELECT * FROM messages 
       WHERE channel_id = ? 
       ORDER BY timestamp DESC 
       LIMIT ?
-    `).all(channelId, safeLimit);
+    `
+      )
+      .all(channelId, safeLimit);
     // Convertir 1/0 a boolean para consistencia
-    return msgs.map(m => ({...m, isSystem: !!m.is_system, channelId: m.channel_id, userId: m.user_id})); 
+    return msgs.map(m => ({
+      ...m,
+      isSystem: !!m.is_system,
+      channelId: m.channel_id,
+      userId: m.user_id,
+    }));
   } else {
     const query = `
       SELECT * FROM messages 
@@ -186,10 +198,10 @@ async function getChannelHistory(channelId, limit = 50) {
     `;
     const res = await db.query(query, [channelId, safeLimit]);
     return res.rows.map(m => ({
-        ...m, 
-        isSystem: m.is_system,
-        channelId: m.channel_id,
-        userId: m.user_id
+      ...m,
+      isSystem: m.is_system,
+      channelId: m.channel_id,
+      userId: m.user_id,
     }));
   }
 }
@@ -202,13 +214,13 @@ module.exports = {
   getChannelHistory,
   deleteMessage,
   // Protección de datos: eliminar datos sensibles antes de enviar al frontend
-  sanitizeUserOutput: function(user) {
+  sanitizeUserOutput: function (user) {
     if (!user) return null;
     // Nunca exponer datos internos, solo los necesarios
     const { id, username, avatar, role, status, last_seen } = user;
     return { id, username, avatar, role, status, lastSeen: last_seen };
   },
-  sanitizeMessageOutput: function(msg) {
+  sanitizeMessageOutput: function (msg) {
     if (!msg) return null;
     // Nunca exponer datos internos, solo los necesarios
     const { id, channel_id, user_id, username, avatar, content, timestamp, is_system } = msg;
@@ -220,11 +232,11 @@ module.exports = {
       avatar,
       content,
       timestamp,
-      isSystem: !!is_system
+      isSystem: !!is_system,
     };
   },
   // Limpieza de mensajes de canal o todos los mensajes
-  clearChannelMessages: async function(channelId) {
+  clearChannelMessages: async function (channelId) {
     if (type === 'sqlite') {
       if (channelId) {
         db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
@@ -240,7 +252,7 @@ module.exports = {
     }
   },
   // Banear usuario (stub, debe implementarse persistencia real)
-  banUser: async function(userId) {
+  banUser: async function (userId) {
     // Aquí se debería guardar el baneo en una tabla o archivo
     // Por ahora solo stub
     if (type === 'sqlite') {
@@ -250,8 +262,8 @@ module.exports = {
     }
   },
   // Migración de datos (stub)
-  migrate: async function() {
+  migrate: async function () {
     // Implementar lógica de migración si se requiere
     return true;
-  }
+  },
 };
