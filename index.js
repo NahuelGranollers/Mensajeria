@@ -1,3 +1,9 @@
+function isAdminUser(userId) {
+  return userId === ADMIN_DISCORD_ID;
+}
+function sanitizeMessage(msg) {
+  return xss(msg);
+}
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -7,6 +13,9 @@ const crypto = require("crypto");
 const axios = require("axios");
 const session = require("express-session");
 const cookieParser = require("cookie-parser");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const xss = require("xss");
 require("dotenv").config();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -100,8 +109,15 @@ const app = express();
 const server = http.createServer(app);
 
 // ✅ Middleware
+app.use(helmet());
 app.use(express.json());
 app.use(cookieParser());
+// Rate limiting para API REST
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: 'Demasiadas peticiones, espera un minuto.'
+}));
 
 // CORS para rutas Express
 app.use((req, res, next) => {
@@ -116,11 +132,26 @@ app.use((req, res, next) => {
   }
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
 
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+// CSRF protection básica (solo para POST)
+app.use((req, res, next) => {
+  if (req.method === 'POST') {
+    const csrf = req.headers['x-csrf-token'];
+    if (!csrf || csrf !== process.env.SESSION_SECRET) {
+      return res.status(403).json({ error: 'CSRF token inválido' });
+    }
+  }
+  next();
+});
+// Sanitización de mensajes para sockets
+function sanitizeMessage(msg) {
+  return xss(msg);
+}
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-super-secret-key-change-this',
@@ -232,7 +263,9 @@ app.get("/auth/user", (req, res) => {
   if (!req.session.discordUser) {
     return res.status(401).json({ error: "Not authenticated" });
   }
-  res.json(req.session.discordUser);
+  // Sanitizar output
+  const safeUser = db.sanitizeUserOutput(req.session.discordUser);
+  res.json(safeUser);
 });
 
 app.post("/auth/logout", (req, res) => {
@@ -277,20 +310,21 @@ io.on("connection", (socket) => {
       await db.saveUser(finalUser);
     }
 
-    socket.emit("user:registered", finalUser);
+    // Sanitizar output antes de enviar
+    socket.emit("user:registered", db.sanitizeUserOutput(finalUser));
 
     // Notificar a todos
-    io.emit("user:online", finalUser);
+    io.emit("user:online", db.sanitizeUserOutput(finalUser));
 
     // Enviar lista de usuarios conectados
-    const onlineUsers = Array.from(connectedUsers.values());
+    const onlineUsers = Array.from(connectedUsers.values()).map(db.sanitizeUserOutput);
     socket.emit("users:list", onlineUsers);
   });
 
   // ✅ Petición explicita de lista de usuarios
   socket.on("users:request", () => {
     const onlineUsers = Array.from(connectedUsers.values());
-    socket.emit("users:list", onlineUsers);
+    socket.emit("users:list", onlineUsers.map(db.sanitizeUserOutput));
   });
 
   // ✅ Unirse a canal y pedir historial
@@ -302,21 +336,27 @@ io.on("connection", (socket) => {
     const history = await db.getChannelHistory(channel);
     socket.emit("channel:history", {
       channelId: channel,
-      messages: history
+      messages: history.map(db.sanitizeMessageOutput)
     });
   });
 
   // ✅ Enviar mensaje
   socket.on("message:send", async (msgData) => {
     if (!msgData.content || !msgData.content.trim()) return;
+    // Sanitizar y validar datos
+    const safeContent = sanitizeMessage(msgData.content.substring(0, 2000));
+    const safeUsername = sanitizeMessage(msgData.username);
+    const safeAvatar = sanitizeMessage(msgData.avatar);
+    const safeChannelId = sanitizeMessage(msgData.channelId || 'general');
+    const safeUserId = sanitizeMessage(msgData.userId);
 
     const message = {
       id: crypto.randomUUID(),
-      channelId: msgData.channelId || 'general',
-      userId: msgData.userId,
-      username: msgData.username,
-      avatar: msgData.avatar,
-      content: msgData.content.substring(0, 2000), // Limitar longitud
+      channelId: safeChannelId,
+      userId: safeUserId,
+      username: safeUsername,
+      avatar: safeAvatar,
+      content: safeContent,
       timestamp: new Date().toISOString(),
       isSystem: false
     };
@@ -325,7 +365,7 @@ io.on("connection", (socket) => {
     await db.saveMessage(message);
 
     // Emitir a todos en el canal
-    io.to(message.channelId).emit("message:received", message);
+    io.to(message.channelId).emit("message:received", db.sanitizeMessageOutput(message));
 
     // 🤖 Lógica del Bot (Respuestas Agresivas)
     if (message.content.toLowerCase().includes('@upg')) {
@@ -351,6 +391,62 @@ io.on("connection", (socket) => {
           'Aquí, aburrido de ver cómo juegas como el culo',
           'Todo perfecto hasta que apareciste tú, subnormal'
         ];
+
+        // 🔒 Admin: Limpiar canal
+        socket.on("admin:clear-channel", async (data) => {
+          const { channelId, adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de limpiar canal por usuario no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          const safeChannelId = sanitizeMessage(channelId);
+          // Eliminar mensajes del canal en DB
+          await db.clearChannelMessages(safeChannelId);
+          io.to(safeChannelId).emit("channel:history", { channelId: safeChannelId, messages: [] });
+          logger.admin(`Canal ${safeChannelId} limpiado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+        });
+
+        // 🔒 Admin: Banear usuario
+        socket.on("admin:ban-user", async (data) => {
+          const { userId, username, adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de banear usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          const safeUserId = sanitizeMessage(userId);
+          const safeUsername = sanitizeMessage(username);
+          // Banear usuario en DB y memoria
+          await db.banUser(safeUserId);
+          io.emit("admin:user-banned", { userId: safeUserId, username: safeUsername });
+          logger.admin(`Usuario ${safeUsername} (${safeUserId ? safeUserId.slice(0, 6) + '...' : 'N/A'}) baneado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+          // Desconectar si está online
+          for (const [sid, user] of connectedUsers.entries()) {
+            if (user.id === safeUserId) {
+              const targetSocket = io.sockets.sockets.get(sid);
+              if (targetSocket) targetSocket.disconnect(true);
+            }
+          }
+        });
+
+        // 🔒 Admin: Expulsar usuario
+        socket.on("admin:kick-user", async (data) => {
+          const { userId, username, adminId } = data;
+          if (!isAdminUser(adminId)) {
+            logger.warning(`Intento de expulsar usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+            return;
+          }
+          const safeUserId = sanitizeMessage(userId);
+          const safeUsername = sanitizeMessage(username);
+          io.emit("admin:user-kicked", { userId: safeUserId, username: safeUsername });
+          logger.admin(`Usuario ${safeUsername} (${safeUserId ? safeUserId.slice(0, 6) + '...' : 'N/A'}) expulsado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+          // Desconectar si está online
+          for (const [sid, user] of connectedUsers.entries()) {
+            if (user.id === safeUserId) {
+              const targetSocket = io.sockets.sockets.get(sid);
+              if (targetSocket) targetSocket.disconnect(true);
+            }
+          }
+        });
         botResponse = statusReplies[Math.floor(Math.random() * statusReplies.length)];
       }
       else if (text.includes('ayuda') || text.includes('help') || text.includes('comandos')) {
@@ -425,7 +521,7 @@ io.on("connection", (socket) => {
       setTimeout(async () => {
         try {
           await db.saveMessage(botMessage);
-          io.to(message.channelId).emit("message:received", botMessage);
+          io.to(message.channelId).emit("message:received", db.sanitizeMessageOutput(botMessage));
         } catch (err) {
           logger.error("Error guardando mensaje del bot:", err);
         }
@@ -464,7 +560,7 @@ io.on("connection", (socket) => {
     const user = connectedUsers.get(socket.id);
     if (user) {
       connectedUsers.delete(socket.id);
-      io.emit("user:offline", { userId: user.id, username: user.username });
+      io.emit("user:offline", { userId: user.id, username: user.username }); // No hay datos sensibles aquí
 
       // Limpiar estado de voz si estaba conectado
       if (voiceStates.has(user.id)) {

@@ -158,24 +158,25 @@ async function saveMessage(msg) {
 
 // Obtener historial de mensajes
 async function getChannelHistory(channelId, limit = 50) {
+  // Limitar máximo a 200 mensajes por petición para evitar cuellos de botella
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 200));
   if (type === 'sqlite') {
     const msgs = db.prepare(`
       SELECT * FROM messages 
       WHERE channel_id = ? 
-      ORDER BY timestamp ASC 
+      ORDER BY timestamp DESC 
       LIMIT ?
-    `).all(channelId, limit);
-    
+    `).all(channelId, safeLimit);
     // Convertir 1/0 a boolean para consistencia
     return msgs.map(m => ({...m, isSystem: !!m.is_system, channelId: m.channel_id, userId: m.user_id})); 
   } else {
     const query = `
       SELECT * FROM messages 
       WHERE channel_id = $1 
-      ORDER BY timestamp ASC 
+      ORDER BY timestamp DESC 
       LIMIT $2
     `;
-    const res = await db.query(query, [channelId, limit]);
+    const res = await db.query(query, [channelId, safeLimit]);
     return res.rows.map(m => ({
         ...m, 
         isSystem: m.is_system,
@@ -190,5 +191,50 @@ module.exports = {
   saveUser,
   getUser,
   saveMessage,
-  getChannelHistory
+  getChannelHistory,
+  // Protección de datos: eliminar datos sensibles antes de enviar al frontend
+  sanitizeUserOutput: function(user) {
+    if (!user) return null;
+    // Nunca exponer datos internos, solo los necesarios
+    const { id, username, avatar, role, status, last_seen } = user;
+    return { id, username, avatar, role, status, lastSeen: last_seen };
+  },
+  sanitizeMessageOutput: function(msg) {
+    if (!msg) return null;
+    // Nunca exponer datos internos, solo los necesarios
+    const { id, channel_id, user_id, username, avatar, content, timestamp, is_system } = msg;
+    return {
+      id,
+      channelId: channel_id,
+      userId: user_id,
+      username,
+      avatar,
+      content,
+      timestamp,
+      isSystem: !!is_system
+    };
+  },
+  // Limpieza de mensajes de canal
+  async clearChannelMessages(channelId) {
+    if (type === 'sqlite') {
+      db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
+    } else {
+      await db.query('DELETE FROM messages WHERE channel_id = $1', [channelId]);
+    }
+  },
+  // Banear usuario (stub, debe implementarse persistencia real)
+  async banUser(userId) {
+    // Aquí se debería guardar el baneo en una tabla o archivo
+    // Por ahora solo stub
+    if (type === 'sqlite') {
+      // Implementar tabla banned si se requiere
+    } else {
+      // Implementar tabla banned en Postgres
+    }
+  },
+  // Migración de datos (stub)
+  async migrate() {
+    // Implementar lógica de migración si se requiere
+    return true;
+  }
 };
