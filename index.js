@@ -413,7 +413,12 @@ io.on("connection", (socket) => {
             return;
           }
           // Limpiar todos los mensajes de todos los canales
-          await db.clearChannelMessages(); // Modifica clearChannelMessages para limpiar todos si no se pasa channelId
+          await db.clearChannelMessages();
+          // Notificar a todos los canales existentes
+          const channels = await db.getAllChannels ? await db.getAllChannels() : ['general'];
+          channels.forEach(channelId => {
+            io.to(channelId).emit("channel:history", { channelId, messages: [] });
+          });
           io.emit("channel:history", { channelId: null, messages: [] });
           logger.admin(`Todos los mensajes de todos los canales han sido eliminados por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
         });
