@@ -718,8 +718,13 @@ io.on('connection', socket => {
         isSystem: !!message.isSystem,
         localId: msgData && msgData.localId ? msgData.localId : null,
       };
-      io.to(message.channelId).emit('message:received', outgoing);
-      socket.emit('message:received', outgoing);
+      // Emit to everyone in the channel except the sender, then emit to sender once.
+      try {
+        socket.to(message.channelId).emit('message:received', outgoing);
+        socket.emit('message:received', outgoing);
+      } catch (e) {
+        logger.debug('Error emitiendo mensaje recibido:', e);
+      }
     } catch (e) {
       logger.debug('Error emitiendo mensaje recibido:', e);
     }
@@ -833,9 +838,9 @@ io.on('connection', socket => {
         try {
           await db.saveMessage(botMessage);
           console.log('SERVIDOR: Enviando respuesta del bot:', botResponse);
-          io.to(message.channelId).emit('message:received', db.sanitizeMessageOutput(botMessage));
-          // También enviar directamente al socket remitente para evitar condiciones de carrera
+          // Emit bot message to all clients in the channel (except sender via socket.to, then emit to sender once)
           try {
+            socket.to(message.channelId).emit('message:received', db.sanitizeMessageOutput(botMessage));
             socket.emit('message:received', db.sanitizeMessageOutput(botMessage));
           } catch (innerErr) {
             logger.debug('No se pudo emitir respuesta del bot directamente al socket remitente:', innerErr);
