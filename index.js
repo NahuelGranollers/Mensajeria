@@ -805,22 +805,39 @@ io.on('connection', socket => {
       }
 
       room.voting = false;
-      // If unique top, eliminate that player (remove from room)
+
+      // If unique top, that player was nominated. Do NOT remove them from the room immediately.
+      // Instead, reveal whether they were the impostor. If they WERE the impostor, end the round.
       let eliminated = null;
+      let wasImpostor = false;
       if (top) {
         eliminated = top;
-        // remove player from room
-        room.players.delete(top);
+        wasImpostor = room.impostorId && top === room.impostorId;
+
+        if (wasImpostor) {
+          // Reveal impostor to everyone and end the round
+          io.to(`impostor:${roomId}`).emit('impostor:reveal', { impostorId: room.impostorId, word: room.word });
+          // reset round state
+          room.started = false;
+          room.word = null;
+          room.impostorId = null;
+          room.turnOrder = [];
+          room.currentTurn = null;
+        } else {
+          // Mark the player as 'revealed innocent' so clients can show that state
+          if (!room.revealedInnocents) room.revealedInnocents = new Set();
+          room.revealedInnocents.add(top);
+        }
       }
 
-      // send results
-      io.to(`impostor:${roomId}`).emit('impostor:voting-result', { roomId, counts, eliminated });
+      // send voting results including whether the eliminated was impostor
+      io.to(`impostor:${roomId}`).emit('impostor:voting-result', { roomId, counts, eliminated, wasImpostor });
 
-      // broadcast updated room state
-      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, username: p.username }));
+      // broadcast updated room state (include revealed flags)
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, username: p.username, revealedInnocent: room.revealedInnocents ? room.revealedInnocents.has(id) : false }));
       io.to(`impostor:${roomId}`).emit('impostor:room-state', { roomId, hostId: room.hostId, players: playersList, started: room.started });
 
-      return ack && ack({ ok: true, eliminated });
+      return ack && ack({ ok: true, eliminated, wasImpostor });
     } catch (e) {
       logger.error('Error ending voting', e);
       return ack && ack({ ok: false, error: 'internal' });
