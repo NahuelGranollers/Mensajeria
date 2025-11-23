@@ -797,6 +797,8 @@ io.on('connection', socket => {
       const room = impostorRooms.get(roomId);
       if (!room || !room.voting) return ack && ack({ ok: false, error: 'not_voting' });
       if (!voterId) return ack && ack({ ok: false, error: 'missing_voter' });
+      // Check if voter is alive
+      if (room.revealedInnocents && room.revealedInnocents.has(voterId)) return ack && ack({ ok: false, error: 'dead_cannot_vote' });
       // store vote
       room.votes.set(voterId, votedId);
       // compute counts
