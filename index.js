@@ -676,14 +676,58 @@ io.on('connection', socket => {
       // Si ya está en este canal, salir (toggle)
       voiceStates.delete(user.id);
       logger.info(`Usuario ${user.username} salió del canal de voz`);
+      // leave socket.io voice room
+      try {
+        socket.leave(`voice:${currentChannel}`);
+      } catch (e) {
+        logger.debug('Error leaving voice room', e);
+      }
     } else {
       // Unirse al nuevo canal
       voiceStates.set(user.id, channelId);
       logger.info(`Usuario ${user.username} se unió al canal de voz: ${channelId}`);
+      try {
+        // leave previous
+        if (currentChannel) socket.leave(`voice:${currentChannel}`);
+        socket.join(`voice:${channelId}`);
+      } catch (e) {
+        logger.debug('Error joining voice room', e);
+      }
     }
 
     // Emitir estado actualizado a TODOS
     io.emit('voice:state', Object.fromEntries(voiceStates));
+  });
+
+  // Receive audio chunks from clients and relay to voice room
+  socket.on('voice:chunk', payload => {
+    try {
+      const user = connectedUsers.get(socket.id);
+      if (!user) return;
+      const channelId = voiceStates.get(user.id);
+      if (!channelId) return;
+
+      // Expect payload to contain: buffer (ArrayBuffer), sampleRate
+      const { buffer, sampleRate } = payload;
+      // Calculate simple RMS level on server for monitoring/broadcast
+      try {
+        const float32 = new Float32Array(buffer);
+        let sum = 0;
+        for (let i = 0; i < float32.length; i++) {
+          sum += float32[i] * float32[i];
+        }
+        const rms = Math.sqrt(sum / float32.length);
+        // Broadcast level to room (including sender so UI updates everywhere)
+        io.to(`voice:${channelId}`).emit('voice:level', { userId: user.id, level: rms });
+      } catch (e) {
+        logger.debug('Error computing RMS on server', e);
+      }
+
+      // Relay audio buffer to others in same voice room
+      socket.to(`voice:${channelId}`).emit('voice:chunk', { fromUserId: user.id, buffer, sampleRate });
+    } catch (err) {
+      logger.error('Error handling voice chunk', err);
+    }
   });
 
   // ✅ Desconexión
