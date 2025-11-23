@@ -583,8 +583,20 @@ io.on('connection', socket => {
 
     // Emitir a todos en el canal inmediatamente to reduce perceived latency
     try {
-      io.to(message.channelId).emit('message:received', db.sanitizeMessageOutput(message));
-      socket.emit('message:received', db.sanitizeMessageOutput(message));
+      // Build outgoing payload mapping to client fields and include localId if provided by client
+      const outgoing = {
+        id: message.id,
+        channelId: message.channelId,
+        userId: message.userId,
+        username: message.username,
+        avatar: message.avatar,
+        content: message.content,
+        timestamp: message.timestamp,
+        isSystem: !!message.isSystem,
+        localId: msgData && msgData.localId ? msgData.localId : null,
+      };
+      io.to(message.channelId).emit('message:received', outgoing);
+      socket.emit('message:received', outgoing);
     } catch (e) {
       logger.debug('Error emitiendo mensaje recibido:', e);
     }

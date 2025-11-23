@@ -53,6 +53,7 @@ async function createTables() {
       username TEXT NOT NULL,
       avatar TEXT,
       color TEXT DEFAULT '#5865F2',
+      score INTEGER DEFAULT 0,
       role TEXT DEFAULT 'user',
       status TEXT DEFAULT 'offline',
       last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -80,9 +81,14 @@ async function createTables() {
           try {
             const cols = db.prepare("PRAGMA table_info('users')").all();
             const hasColor = cols.some(c => c.name === 'color');
+            const hasScore = cols.some(c => c.name === 'score');
             if (!hasColor) {
               db.exec("ALTER TABLE users ADD COLUMN color TEXT DEFAULT '#5865F2'");
               console.log('✅ [DB] Columna color añadida a users (migración)');
+            }
+            if (!hasScore) {
+              db.exec("ALTER TABLE users ADD COLUMN score INTEGER DEFAULT 0");
+              console.log('✅ [DB] Columna score añadida a users (migración)');
             }
           } catch (merr) {
             console.warn('No se pudo verificar/añadir columna color:', merr);
@@ -109,6 +115,7 @@ async function createTables() {
           // Ensure color column exists in Postgres
           try {
             await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#5865F2'`);
+           await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 0`);
           } catch (merr) {
             console.warn('No se pudo verificar/añadir columna color en Postgres:', merr);
           }
@@ -126,33 +133,36 @@ async function createTables() {
 // Guardar o actualizar usuario
 async function saveUser(user) {
   const { id, username, avatar, role, status, color } = user;
+  const score = user.score || 0;
 
   if (type === 'sqlite') {
     const stmt = db.prepare(`
-      INSERT INTO users (id, username, avatar, color, role, status, last_seen)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO users (id, username, avatar, color, score, role, status, last_seen)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(id) DO UPDATE SET
       username = excluded.username,
       avatar = excluded.avatar,
       color = excluded.color,
+      score = excluded.score,
       role = excluded.role,
       status = excluded.status,
       last_seen = datetime('now')
     `);
-    stmt.run(id, username, avatar, color || '#5865F2', role, status);
+    stmt.run(id, username, avatar, color || '#5865F2', score, role, status);
   } else {
     const query = `
-      INSERT INTO users (id, username, avatar, color, role, status, last_seen)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      INSERT INTO users (id, username, avatar, color, score, role, status, last_seen)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
       ON CONFLICT(id) DO UPDATE SET
       username = EXCLUDED.username,
       avatar = EXCLUDED.avatar,
       color = EXCLUDED.color,
+      score = EXCLUDED.score,
       role = EXCLUDED.role,
       status = EXCLUDED.status,
       last_seen = NOW()
     `;
-    await db.query(query, [id, username, avatar, color || '#5865F2', role, status]);
+    await db.query(query, [id, username, avatar, color || '#5865F2', score, role, status]);
   }
 }
 
@@ -237,8 +247,8 @@ module.exports = {
   sanitizeUserOutput: function (user) {
     if (!user) return null;
     // Nunca exponer datos internos, solo los necesarios
-    const { id, username, avatar, role, status, last_seen, color } = user;
-    return { id, username, avatar, role, status, color: color || '#5865F2', lastSeen: last_seen };
+    const { id, username, avatar, role, status, last_seen, color, score } = user;
+    return { id, username, avatar, role, status, color: color || '#5865F2', score: score || 0, lastSeen: last_seen };
   },
   sanitizeMessageOutput: function (msg) {
     if (!msg) return null;
