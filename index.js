@@ -658,6 +658,33 @@ io.on('connection', socket => {
     }
   });
 
+  // Usuario actualiza su perfil (nombre/color)
+  socket.on('user:update', async data => {
+    try {
+      const user = connectedUsers.get(socket.id);
+      if (!user) return;
+      // Allow updating limited fields only
+      const safeName = typeof data.username === 'string' ? sanitizeMessage(data.username.substring(0, 50)) : user.username;
+      const safeColor = typeof data.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(data.color) ? data.color : user.color;
+
+      // Update connectedUsers map and DB
+      const updated = { ...user, username: safeName, color: safeColor };
+      connectedUsers.set(socket.id, updated);
+      try {
+        await db.saveUser({ id: updated.id, username: updated.username, avatar: updated.avatar, role: updated.role, status: updated.status, color: updated.color });
+      } catch (e) {
+        logger.debug('Error saving updated user to DB', e);
+      }
+
+      // Broadcast to everyone that the user was updated
+      io.emit('user:updated', db.sanitizeUserOutput(updated));
+      // Also emit legacy admin color event for compatibility
+      io.emit('admin:user-color-changed', { userId: updated.id, color: updated.color });
+    } catch (err) {
+      logger.error('Error handling user:update', err);
+    }
+  });
+
   // ✅ Canales de Voz
   socket.on('voice:join', ({ channelId }) => {
     logger.info(`Intento de unirse a voz: ${socket.id} -> ${channelId}`);
