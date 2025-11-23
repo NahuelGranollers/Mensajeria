@@ -252,18 +252,17 @@ module.exports = {
   },
   sanitizeMessageOutput: function (msg) {
     if (!msg) return null;
-    // Nunca exponer datos internos, solo los necesarios
-    const { id, channel_id, user_id, username, avatar, content, timestamp, is_system } = msg;
-    return {
-      id,
-      channelId: channel_id,
-      userId: user_id,
-      username,
-      avatar,
-      content,
-      timestamp,
-      isSystem: !!is_system,
-    };
+    // Normalize both DB rows (snake_case) and in-memory objects (camelCase)
+    const id = msg.id || msg.message_id || null;
+    const channelId = msg.channelId || msg.channel_id || null;
+    const userId = msg.userId || msg.user_id || null;
+    const username = msg.username || msg.user_name || null;
+    const avatar = msg.avatar || null;
+    const content = msg.content || '';
+    const timestamp = msg.timestamp || msg.time || null;
+    const isSystem = typeof msg.isSystem !== 'undefined' ? !!msg.isSystem : !!msg.is_system;
+
+    return { id, channelId, userId, username, avatar, content, timestamp, isSystem };
   },
   // Limpieza de mensajes de canal o todos los mensajes
   clearChannelMessages: async function (channelId) {
