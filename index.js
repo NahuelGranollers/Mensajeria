@@ -143,31 +143,24 @@ function sanitizeMessage(msg) {
 
 // Simple text transforms for troll modes
 function uwuify(text) {
-  return String(text)
-    .replace(/r|l/g, 'w')
-    .replace(/R|L/g, 'W')
-    .replace(/no+/g, 'nyo')
-    .replace(/!+/g, ' >w<')
-    .replace(/\.\.\./g, '... owo')
-    + ' uwu';
+  const t = String(text);
+  // Gentle uwu wrapper + light replacements
+  const body = t.replace(/r|l/g, 'w').replace(/R|L/g, 'W');
+  return `UwU ${body} UwU`;
 }
 
 function meowify(text) {
-  return String(text)
-    .split(' ')
-    .map(w => w + (Math.random() > 0.7 ? ' m~eow' : ''))
-    .join(' ')
-    .replace(/\?/g, '?? meow')
-    .replace(/!/g, '!! meow');
+  const t = String(text);
+  // Wrap with meow markers and sprinkle some 'meow' on sentence ends
+  const body = t.replace(/\?/g, '? meow').replace(/!/g, '! meow');
+  return `~m~ ${body} ~m~`;
 }
 
 function kawaiify(text) {
-  return String(text)
-    .replace(/\b(you|your)\b/gi, 'uwu')
-    .replace(/\b(hello|hi)\b/gi, 'nyaa~')
-    .replace(/\./g, ' ✨')
-    .replace(/!/g, '!!! ✨')
-    + ' ♡';
+  const t = String(text);
+  // Simple kawaiify: add sparkles and hearts around
+  const body = t.replace(/\./g, ' ✨').replace(/!/g, '!!! ✨');
+  return `♡ ${body} ♡`;
 }
 
 function applyTrollTransform(userId, text) {
@@ -705,6 +698,11 @@ io.on('connection', socket => {
       timestamp: new Date().toISOString(),
       isSystem: false,
     };
+
+    // Log when a message was transformed by troll-mode for easier debugging
+    if (originalContent !== transformedContent) {
+      logger.info(`TROLL TRANSFORM applied for user=${safeUserId} mode=${trolledUsers.get(safeUserId)} channel=${safeChannelId}`);
+    }
 
     // Emitir a todos en el canal inmediatamente to reduce perceived latency
     try {
