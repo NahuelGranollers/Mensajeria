@@ -705,6 +705,26 @@ io.on('connection', socket => {
       }
     }
   });
+
+  // ✅ WebRTC signaling relay for voice
+  socket.on('voice:signal', ({ toUserId, data }) => {
+    try {
+      const fromUser = connectedUsers.get(socket.id);
+      if (!fromUser) return;
+      // Buscar socketId del destinatario
+      for (const [sid, u] of connectedUsers.entries()) {
+        if (u.id === toUserId) {
+          const targetSocket = io.sockets.sockets.get(sid);
+          if (targetSocket) {
+            targetSocket.emit('voice:signal', { fromUserId: fromUser.id, data });
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      logger.error('Error relaying voice signal', err);
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
