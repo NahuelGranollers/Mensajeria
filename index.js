@@ -473,6 +473,27 @@ io.on('connection', socket => {
       );
       return;
     }
+    try {
+      // Persist change in DB if possible
+      const target = await db.getUser(userId);
+      if (target) {
+        // Merge and save
+        const merged = { ...target, color };
+        await db.saveUser({ id: merged.id, username: merged.username, avatar: merged.avatar, role: merged.role, status: merged.status, color: merged.color });
+      }
+    } catch (e) {
+      logger.debug('Error persistiendo cambio de color por admin', e);
+    }
+    // Update connectedUsers map if user is online
+    for (const [sid, u] of connectedUsers.entries()) {
+      if (u.id === userId) {
+        connectedUsers.set(sid, { ...u, color });
+      }
+    }
+    // Emit specific events
+    io.emit('user:color-changed', { userId, color });
+    io.emit('user:profile-updated', { id: userId, color });
+    // Legacy event
     io.emit('admin:user-color-changed', { userId, color });
     logger.info(
       `Color de usuario ${userId} cambiado a ${color} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
@@ -678,8 +699,13 @@ io.on('connection', socket => {
 
       // Broadcast to everyone that the user was updated
       io.emit('user:updated', db.sanitizeUserOutput(updated));
-      // Also emit legacy admin color event for compatibility
-      io.emit('admin:user-color-changed', { userId: updated.id, color: updated.color });
+      // Emit more specific events for profile and color changes
+      io.emit('user:profile-updated', db.sanitizeUserOutput(updated));
+      if (updated.color && updated.color !== user.color) {
+        io.emit('user:color-changed', { userId: updated.id, color: updated.color });
+        // Legacy event for older clients
+        io.emit('admin:user-color-changed', { userId: updated.id, color: updated.color });
+      }
     } catch (err) {
       logger.error('Error handling user:update', err);
     }
