@@ -691,23 +691,31 @@ io.on('connection', socket => {
       if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
       if (room.started) return ack && ack({ ok: false, error: 'already_started' });
 
-      // pick a random word and a random impostor among players
+      // pick a random word and generate a randomized turn order among players
       const word = IMPOSTOR_WORDS[Math.floor(Math.random() * IMPOSTOR_WORDS.length)];
       const playerIds = Array.from(room.players.keys());
       if (playerIds.length < 2) return ack && ack({ ok: false, error: 'not_enough_players' });
-      const impostorIndex = Math.floor(Math.random() * playerIds.length);
-      const impostorId = playerIds[impostorIndex];
+
+      // Shuffle playerIds to create a random turn order
+      const shuffled = playerIds.slice();
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      const impostorId = shuffled[Math.floor(Math.random() * shuffled.length)];
       room.started = true;
       room.word = word;
       room.impostorId = impostorId;
 
-      // initialize voting state and pick a random current turn
+      // initialize voting state and set turn order
       room.votes = new Map();
       room.voting = false;
-      const currentTurnIndex = Math.floor(Math.random() * playerIds.length);
-      room.currentTurn = playerIds[currentTurnIndex];
+      room.turnOrder = shuffled;
+      room.currentTurn = shuffled[0] || null;
 
-      // Emit current turn so clients can animate/select whose turn it is
+      // Emit turn order and current turn so clients can animate/select whose turn it is
+      io.to(`impostor:${roomId}`).emit('impostor:turn-order', { roomId, turnOrder: room.turnOrder });
       io.to(`impostor:${roomId}`).emit('impostor:turn', { currentTurn: room.currentTurn });
 
       // Send assignment privately to each player
