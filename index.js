@@ -64,14 +64,10 @@ const impostorRooms = new Map();
 
 // Small default word list for rounds (can be extended or loaded from DB)
 const IMPOSTOR_WORDS = [
-  'Manzana',
-  'Sombrero',
-  'Pescado',
-  'Llave',
-  'Gato',
-  'Cohete',
-  'Reloj',
-  'Libro',
+  'Manzana', 'Sombrero', 'Pescado', 'Llave', 'Gato', 'Cohete', 'Reloj', 'Libro',
+  'Sandía', 'Bicicleta', 'Estatua', 'Calcetín', 'Pastel', 'Ovni', 'Pingüino', 'Mariposa',
+  'Tiburón', 'Cohete', 'Espada', 'Sombrero', 'Guisante', 'Moneda', 'Teléfono', 'Telefono', 'Camisa',
+  'Zapato', 'Cámara', 'Silla', 'Mesa', 'Guitarra', 'Piano', 'Auto', 'Helado', 'Globo', 'RelojDeArena'
 ];
 
 // ✅ Sistema de Logs Profesional con Winston
@@ -705,6 +701,15 @@ io.on('connection', socket => {
       room.word = word;
       room.impostorId = impostorId;
 
+      // initialize voting state and pick a random current turn
+      room.votes = new Map();
+      room.voting = false;
+      const currentTurnIndex = Math.floor(Math.random() * playerIds.length);
+      room.currentTurn = playerIds[currentTurnIndex];
+
+      // Emit current turn so clients can animate/select whose turn it is
+      io.to(`impostor:${roomId}`).emit('impostor:turn', { currentTurn: room.currentTurn });
+
       // Send assignment privately to each player
       for (const [pid, p] of room.players.entries()) {
         const targetSocket = io.sockets.sockets.get(p.socketId);
@@ -721,6 +726,118 @@ io.on('connection', socket => {
       return ack && ack({ ok: true });
     } catch (e) {
       logger.error('Error starting impostor round', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  // Host starts the voting phase in a room
+  socket.on('impostor:start-voting', ({ roomId, hostId }, ack) => {
+    try {
+      const room = impostorRooms.get(roomId);
+      if (!room) return ack && ack({ ok: false, error: 'not_found' });
+      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
+      if (!room.started) return ack && ack({ ok: false, error: 'not_started' });
+
+      room.voting = true;
+      room.votes = new Map();
+      io.to(`impostor:${roomId}`).emit('impostor:voting-start', { roomId });
+      return ack && ack({ ok: true });
+    } catch (e) {
+      logger.error('Error starting voting', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  // Cast a vote during voting phase
+  socket.on('impostor:cast-vote', ({ roomId, voterId, votedId }, ack) => {
+    try {
+      const room = impostorRooms.get(roomId);
+      if (!room || !room.voting) return ack && ack({ ok: false, error: 'not_voting' });
+      if (!voterId) return ack && ack({ ok: false, error: 'missing_voter' });
+      // store vote
+      room.votes.set(voterId, votedId);
+      // compute counts
+      const counts = {};
+      for (const [voter, target] of room.votes.entries()) {
+        if (!target) continue;
+        counts[target] = (counts[target] || 0) + 1;
+      }
+      io.to(`impostor:${roomId}`).emit('impostor:voting-update', { roomId, counts, totalVotes: room.votes.size });
+      return ack && ack({ ok: true });
+    } catch (e) {
+      logger.error('Error casting vote', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  // Host ends voting and server tallies results
+  socket.on('impostor:end-voting', ({ roomId, hostId }, ack) => {
+    try {
+      const room = impostorRooms.get(roomId);
+      if (!room || !room.voting) return ack && ack({ ok: false, error: 'not_voting' });
+      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
+
+      // tally
+      const counts = {};
+      for (const [voter, target] of room.votes.entries()) {
+        if (!target) continue;
+        counts[target] = (counts[target] || 0) + 1;
+      }
+      // find winner (highest votes)
+      let max = 0;
+      let top = null;
+      for (const id in counts) {
+        if (counts[id] > max) {
+          max = counts[id];
+          top = id;
+        } else if (counts[id] === max) {
+          // tie -> no elimination
+          top = null;
+        }
+      }
+
+      room.voting = false;
+      // If unique top, eliminate that player (remove from room)
+      let eliminated = null;
+      if (top) {
+        eliminated = top;
+        // remove player from room
+        room.players.delete(top);
+      }
+
+      // send results
+      io.to(`impostor:${roomId}`).emit('impostor:voting-result', { roomId, counts, eliminated });
+
+      // broadcast updated room state
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, username: p.username }));
+      io.to(`impostor:${roomId}`).emit('impostor:room-state', { roomId, hostId: room.hostId, players: playersList, started: room.started });
+
+      return ack && ack({ ok: true, eliminated });
+    } catch (e) {
+      logger.error('Error ending voting', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  // Host can restart the round (pick a new word and re-assign)
+  socket.on('impostor:restart', ({ roomId, hostId }, ack) => {
+    try {
+      const room = impostorRooms.get(roomId);
+      if (!room) return ack && ack({ ok: false, error: 'not_found' });
+      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
+
+      // reset state
+      room.started = false;
+      room.word = null;
+      room.impostorId = null;
+      room.voting = false;
+      room.votes = new Map();
+
+      // Notify clients and allow host to start a new round
+      io.to(`impostor:${roomId}`).emit('impostor:restarted', { roomId });
+      return ack && ack({ ok: true });
+    } catch (e) {
+      logger.error('Error restarting round', e);
       return ack && ack({ ok: false, error: 'internal' });
     }
   });
