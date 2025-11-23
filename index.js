@@ -7,6 +7,7 @@ function sanitizeMessage(msg) {
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const compression = require('compression');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -80,6 +81,15 @@ if (!fs.existsSync('logs')) {
 
 const app = express();
 const server = http.createServer(app);
+
+// Use gzip compression for HTTP responses to reduce bandwidth
+app.use(compression());
+
+// Serve server-side public files (worklets or assets) with caching headers
+const serverPublicPath = path.join(__dirname, 'public');
+if (fs.existsSync(serverPublicPath)) {
+  app.use('/server-public', express.static(serverPublicPath, { maxAge: '7d' }));
+}
 
 // ✅ Middleware
 app.use(helmet());
@@ -156,6 +166,10 @@ const io = new Server(server, {
     ],
     methods: ['GET', 'POST'],
     credentials: true,
+  },
+  // Enable per-message deflate to reduce socket payloads when beneficial
+  perMessageDeflate: {
+    threshold: 1024, // only compress messages larger than 1KB
   },
 });
 
@@ -282,6 +296,11 @@ app.post('/auth/logout', (req, res) => {
 
 io.on('connection', socket => {
   logger.info(`Usuario conectado: ${socket.id}`);
+
+  // Simple per-socket rate limiting state
+  const lastMessageAt = { time: 0 };
+  // Throttle map for voice level broadcasts per user (to avoid flooding)
+  const lastLevelBroadcast = new Map();
 
   // ✅ Usuario se une
   socket.on('user:join', async userData => {
@@ -534,6 +553,16 @@ io.on('connection', socket => {
   // ✅ Enviar mensaje
   socket.on('message:send', async msgData => {
     if (!msgData.content || !msgData.content.trim()) return;
+    // Basic rate limiting per socket: 2 messages per second (adjustable)
+    try {
+      const now = Date.now();
+      if (now - lastMessageAt.time < 500 && !(msgData.admin && msgData.admin === true)) {
+        // ignore or drop frequent messages from non-admins
+        socket.emit('message:send:rate_limited');
+        return;
+      }
+      lastMessageAt.time = now;
+    } catch (e) {}
     // Sanitizar y validar datos
     const safeContent = sanitizeMessage(msgData.content.substring(0, 2000));
     const safeUsername = sanitizeMessage(msgData.username);
@@ -552,17 +581,22 @@ io.on('connection', socket => {
       isSystem: false,
     };
 
-    // Guardar en DB
-    await db.saveMessage(message);
-
-    // Emitir a todos en el canal
-    io.to(message.channelId).emit('message:received', db.sanitizeMessageOutput(message));
-    // Asegurar entrega al socket remitente aunque no se haya unido todavía al room
+    // Emitir a todos en el canal inmediatamente to reduce perceived latency
     try {
+      io.to(message.channelId).emit('message:received', db.sanitizeMessageOutput(message));
       socket.emit('message:received', db.sanitizeMessageOutput(message));
     } catch (e) {
-      logger.debug('No se pudo emitir directamente al socket remitente:', e);
+      logger.debug('Error emitiendo mensaje recibido:', e);
     }
+
+    // Persistir en DB de forma asíncrona (no bloquear el main loop)
+    setImmediate(async () => {
+      try {
+        await db.saveMessage(message);
+      } catch (err) {
+        logger.error('Error guardando mensaje en DB (async):', err);
+      }
+    });
 
     // 🤖 Lógica del Bot (Respuestas Agresivas)
     if (message.content.toLowerCase().includes('@upg')) {
@@ -770,8 +804,13 @@ io.on('connection', socket => {
           sum += float32[i] * float32[i];
         }
         const rms = Math.sqrt(sum / float32.length);
-        // Broadcast level to room (including sender so UI updates everywhere)
-        io.to(`voice:${channelId}`).emit('voice:level', { userId: user.id, level: rms });
+        // Throttle level broadcasts per user to at most ~10Hz (100ms)
+        const last = lastLevelBroadcast.get(user.id) || 0;
+        const now = Date.now();
+        if (now - last > 100) {
+          lastLevelBroadcast.set(user.id, now);
+          io.to(`voice:${channelId}`).emit('voice:level', { userId: user.id, level: rms });
+        }
       } catch (e) {
         logger.debug('Error computing RMS on server', e);
       }
