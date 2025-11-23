@@ -291,6 +291,14 @@ module.exports = {
       // Implementar tabla banned en Postgres
     }
   },
+  // Eliminar todos los usuarios (con precaución)
+  deleteAllUsers: async function () {
+    if (type === 'sqlite') {
+      db.prepare('DELETE FROM users WHERE id != ?').run('bot');
+    } else {
+      await db.query("DELETE FROM users WHERE id != $1", ['bot']);
+    }
+  },
   // Migración de datos (stub)
   migrate: async function () {
     // Implementar lógica de migración si se requiere

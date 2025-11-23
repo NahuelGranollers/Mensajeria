@@ -53,6 +53,9 @@ const BOT_USER = {
 const connectedUsers = new Map();
 connectedUsers.set('bot', BOT_USER);
 
+// Estado de usuarios 'trolleados' por admin: userId -> mode (e.g., 'uwu', 'meow', 'kawaii')
+const trolledUsers = new Map();
+
 // Estado de canales de voz: userId -> channelId
 const voiceStates = new Map();
 
@@ -136,6 +139,50 @@ app.use((req, res, next) => {
 // Sanitización de mensajes para sockets
 function sanitizeMessage(msg) {
   return xss(msg);
+}
+
+// Simple text transforms for troll modes
+function uwuify(text) {
+  return String(text)
+    .replace(/r|l/g, 'w')
+    .replace(/R|L/g, 'W')
+    .replace(/no+/g, 'nyo')
+    .replace(/!+/g, ' >w<')
+    .replace(/\.\.\./g, '... owo')
+    + ' uwu';
+}
+
+function meowify(text) {
+  return String(text)
+    .split(' ')
+    .map(w => w + (Math.random() > 0.7 ? ' m~eow' : ''))
+    .join(' ')
+    .replace(/\?/g, '?? meow')
+    .replace(/!/g, '!! meow');
+}
+
+function kawaiify(text) {
+  return String(text)
+    .replace(/\b(you|your)\b/gi, 'uwu')
+    .replace(/\b(hello|hi)\b/gi, 'nyaa~')
+    .replace(/\./g, ' ✨')
+    .replace(/!/g, '!!! ✨')
+    + ' ♡';
+}
+
+function applyTrollTransform(userId, text) {
+  const mode = trolledUsers.get(userId);
+  if (!mode) return text;
+  try {
+    if (mode === 'uwu') return uwuify(text);
+    if (mode === 'meow') return meowify(text);
+    if (mode === 'kawaii') return kawaiify(text);
+    // default noop
+    return text;
+  } catch (e) {
+    logger.debug('Error applying troll transform', e);
+    return text;
+  }
 }
 
 app.use(
@@ -399,6 +446,49 @@ io.on('connection', socket => {
     );
   });
 
+  // 🔒 Admin: Reiniciar usuarios (desconectar y borrar usuarios de la DB)
+  socket.on('admin:clear-users', async data => {
+    const { adminId } = data || {};
+    if (!isAdminUser(adminId)) {
+      logger.warn(`Intento de clear-users por no admin: ${adminId ? adminId.slice(0,6)+'...' : 'N/A'}`);
+      return;
+    }
+    try {
+      // Disconnect all non-bot sockets
+      const sidsToDisconnect = [];
+      for (const [sid, u] of connectedUsers.entries()) {
+        if (u && u.id === 'bot') continue;
+        sidsToDisconnect.push(sid);
+      }
+      for (const sid of sidsToDisconnect) {
+        try {
+          const s = io.sockets.sockets.get(sid);
+          if (s) s.disconnect(true);
+        } catch (e) {
+          logger.debug('Error desconectando socket durante clear-users', e);
+        }
+      }
+
+      // Clear connectedUsers and re-seed bot user
+      connectedUsers.clear();
+      connectedUsers.set('bot', BOT_USER);
+
+      // Remove all users from DB (keep messages if desired, currently remove users only)
+      if (db.deleteAllUsers) {
+        try {
+          await db.deleteAllUsers();
+        } catch (e) {
+          logger.error('Error borrando usuarios de la DB durante clear-users', e);
+        }
+      }
+
+      io.emit('users:list', Array.from(connectedUsers.values()).map(db.sanitizeUserOutput));
+      logger.info(`Todos los usuarios han sido reiniciados por admin ${adminId ? adminId.slice(0,6)+'...' : 'N/A'}`);
+    } catch (err) {
+      logger.error('Error en admin:clear-users', err);
+    }
+  });
+
   // 🔒 Admin: Banear usuario
   socket.on('admin:ban-user', async data => {
     const { userId, username, adminId } = data;
@@ -521,14 +611,37 @@ io.on('connection', socket => {
 
   // 🔒 Admin: Mensaje global
   socket.on('admin:global-message', async data => {
-    const { content, adminId } = data;
+    const { content, adminId, sendAsBot, channelId } = data;
     if (!isAdminUser(adminId)) {
       logger.warn(
         `Intento de mensaje global por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
       return;
     }
-    // Emitir a todos los canales
+    // If requested, send as the bot into a specific channel (or general)
+    const targetChannel = channelId || 'general';
+    if (sendAsBot) {
+      const botMessage = {
+        id: crypto.randomUUID(),
+        channelId: targetChannel,
+        userId: 'bot',
+        username: BOT_USER.username,
+        avatar: BOT_USER.avatar,
+        content: sanitizeMessage(String(content).substring(0, 2000)),
+        timestamp: new Date().toISOString(),
+        isSystem: false,
+        role: 'bot',
+      };
+      try {
+        await db.saveMessage(botMessage);
+      } catch (err) {
+        logger.error('Error guardando mensaje global del bot:', err);
+      }
+      io.to(targetChannel).emit('message:received', db.sanitizeMessageOutput(botMessage));
+      logger.info(`Mensaje global (como bot) enviado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+      return;
+    }
+    // Emitir a todos los canales (legacy global notice)
     io.emit('admin:global-message', { content });
     logger.info(
       `Mensaje global enviado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
@@ -537,17 +650,25 @@ io.on('connection', socket => {
 
   // 🔒 Admin: Modo troll
   socket.on('admin:troll-mode', async data => {
-    const { userId, adminId } = data;
+    const { userId, mode, adminId } = data; // mode can be 'uwu', 'meow', 'kawaii', or null to clear
     if (!isAdminUser(adminId)) {
       logger.warn(
         `Intento de modo troll por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
       return;
     }
-    io.emit('admin:user-troll', { userId });
-    logger.info(
-      `Modo troll activado para usuario ${userId} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-    );
+
+    if (!userId) return;
+    const safeMode = mode && typeof mode === 'string' ? mode : null;
+    if (safeMode) {
+      trolledUsers.set(userId, safeMode);
+      io.emit('admin:user-troll', { userId, mode: safeMode });
+      logger.info(`Modo troll '${safeMode}' activado para usuario ${userId} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+    } else {
+      trolledUsers.delete(userId);
+      io.emit('admin:user-troll:cleared', { userId });
+      logger.info(`Modo troll desactivado para usuario ${userId} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`);
+    }
   });
 
   // ✅ Enviar mensaje
@@ -570,13 +691,17 @@ io.on('connection', socket => {
     const safeChannelId = sanitizeMessage(msgData.channelId || 'general');
     const safeUserId = sanitizeMessage(msgData.userId);
 
+    // Keep original for bot triggers, but apply troll transforms if any
+    const originalContent = safeContent;
+    const transformedContent = applyTrollTransform(safeUserId, originalContent);
+
     const message = {
       id: crypto.randomUUID(),
       channelId: safeChannelId,
       userId: safeUserId,
       username: safeUsername,
       avatar: safeAvatar,
-      content: safeContent,
+      content: transformedContent,
       timestamp: new Date().toISOString(),
       isSystem: false,
     };
@@ -611,8 +736,8 @@ io.on('connection', socket => {
     });
 
     // 🤖 Lógica del Bot (Respuestas Agresivas)
-    if (message.content.toLowerCase().includes('@upg')) {
-      const text = message.content.toLowerCase();
+    if (originalContent.toLowerCase().includes('@upg')) {
+      const text = originalContent.toLowerCase();
       let botResponse = '';
 
       // Respuestas agresivas según palabras clave
