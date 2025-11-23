@@ -665,14 +665,20 @@ io.on('connection', socket => {
   });
 
   // ✅ Enviar mensaje
-  socket.on('message:send', async msgData => {
+  socket.on('message:send', async (msgData, ack) => {
     if (!msgData.content || !msgData.content.trim()) return;
     // Basic rate limiting per socket: 2 messages per second (adjustable)
     try {
       const now = Date.now();
       if (now - lastMessageAt.time < 500 && !(msgData.admin && msgData.admin === true)) {
         // ignore or drop frequent messages from non-admins
-        socket.emit('message:send:rate_limited');
+        if (ack && typeof ack === 'function') {
+          try {
+            ack({ ok: false, error: 'rate_limited' });
+          } catch (e) {}
+        } else {
+          socket.emit('message:send:rate_limited');
+        }
         return;
       }
       lastMessageAt.time = now;
@@ -725,8 +731,19 @@ io.on('connection', socket => {
       } catch (e) {
         logger.debug('Error emitiendo mensaje recibido:', e);
       }
+      // Send acknowledgement to sender if provided
+      if (ack && typeof ack === 'function') {
+        try {
+          ack({ ok: true, id: message.id, timestamp: message.timestamp, localId: outgoing.localId });
+        } catch (e) {}
+      }
     } catch (e) {
       logger.debug('Error emitiendo mensaje recibido:', e);
+      if (ack && typeof ack === 'function') {
+        try {
+          ack({ ok: false, error: 'emit_error' });
+        } catch (e) {}
+      }
     }
 
     // Persistir en DB de forma asíncrona (no bloquear el main loop)
