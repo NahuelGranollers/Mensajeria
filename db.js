@@ -317,8 +317,6 @@ module.exports = {
       score: score || 0,
       verified: !!verified,
       lastSeen: last_seen,
-    };score: score || 0,
-      lastSeen: last_seen,
     };
   },
   sanitizeMessageOutput: function (msg) {
