@@ -1505,6 +1505,76 @@ io.on('connection', socket => {
       return ack && ack({ ok: false, error: 'internal' });
     }
   });
+
+  // ✅ Desconexión
+  socket.on('disconnect', () => {
+    const user = connectedUsers.get(socket.id);
+    if (user) {
+      logger.info(`Usuario desconectado: ${user.username} (${socket.id})`);
+      connectedUsers.delete(socket.id);
+      
+      // Remove from voice channels
+      const voiceChannel = voiceStates.get(socket.id);
+      if (voiceChannel) {
+        voiceStates.delete(socket.id);
+        // Notify channel members
+        const usersInChannel = [];
+        for (const [sid, cid] of voiceStates.entries()) {
+          if (cid === voiceChannel) {
+            const u = connectedUsers.get(sid);
+            if (u) usersInChannel.push(u.id);
+          }
+        }
+        io.to(`voice:${voiceChannel}`).emit('voice:state', { channelId: voiceChannel, users: usersInChannel });
+      }
+
+      // Remove from impostor rooms if in one
+      // This is a bit expensive (iterating all rooms), but safe for now
+      for (const [roomId, room] of impostorRooms.entries()) {
+        if (room.players.has(user.id)) {
+          room.players.delete(user.id);
+          // If room empty, delete
+          if (room.players.size === 0) {
+            impostorRooms.delete(roomId);
+            publicServers.get('impostor').delete(roomId);
+          } else {
+            // If host left, reassign
+            if (room.hostId === user.id) {
+              const next = room.players.keys().next();
+              room.hostId = next.value;
+              // Update public server host name
+              const publicServer = publicServers.get('impostor').get(roomId);
+              if (publicServer) {
+                const newHost = room.players.get(room.hostId);
+                if (newHost) publicServer.hostName = newHost.username;
+              }
+            }
+            // Update public server count
+            const publicServer = publicServers.get('impostor').get(roomId);
+            if (publicServer) publicServer.playerCount = room.players.size;
+            
+            // Notify room
+            io.to(`impostor:${roomId}`).emit('impostor:player-left', { roomId, username: user.username });
+            const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, username: p.username }));
+            io.to(`impostor:${roomId}`).emit('impostor:room-state', {
+              roomId,
+              hostId: room.hostId,
+              players: playersList,
+              started: room.started,
+              customWords: room.customWords
+            });
+          }
+          broadcastPublicServers();
+        }
+      }
+
+      io.emit('user:offline', { userId: user.id });
+      
+      // Update list for everyone
+      const onlineUsers = Array.from(connectedUsers.values()).map(db.sanitizeUserOutput);
+      io.emit('users:list', onlineUsers);
+    }
+  });
 });
 
 // ===============================================
