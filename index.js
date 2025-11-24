@@ -187,9 +187,13 @@ app.use((req, res, next) => {
 // CSRF protection básica (solo para POST)
 app.use((req, res, next) => {
   if (req.method === 'POST') {
-    const csrf = req.headers['x-csrf-token'];
-    if (!csrf || csrf !== process.env.SESSION_SECRET) {
-      return res.status(403).json({ error: 'CSRF token inválido' });
+    // Skip CSRF for localhost development
+    const isLocalhost = req.headers.origin === 'http://localhost:5173' || req.headers.referer && req.headers.referer.startsWith('http://localhost:5173') || req.connection.remoteAddress === '127.0.0.1' || req.connection.remoteAddress === '::1';
+    if (!isLocalhost) {
+      const csrf = req.headers['x-csrf-token'];
+      if (!csrf || csrf !== process.env.SESSION_SECRET) {
+        return res.status(403).json({ error: 'CSRF token inválido' });
+      }
     }
   }
   next();
