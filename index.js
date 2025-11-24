@@ -418,11 +418,25 @@ app.post('/admin/console', catchAsync(async (req, res) => {
   if (action === 'on' || action === 'enable') {
     adminPasswordUnlocked = true;
     logger.info('Admin unlocked via /admin/console');
+    // Update roles for all connected users if they become admin
+    for (const [socketId, user] of connectedUsers.entries()) {
+      if (user.id !== 'bot' && isAdminUser(user.id) && user.role !== 'admin') {
+        user.role = 'admin';
+        io.emit('user:updated', db.sanitizeUserOutput(user));
+      }
+    }
     return res.json({ ok: true, status: 'admin_on' });
   }
   if (action === 'off' || action === 'disable') {
     adminPasswordUnlocked = false;
     logger.info('Admin locked via /admin/console');
+    // Update roles for all connected users if they lose admin
+    for (const [socketId, user] of connectedUsers.entries()) {
+      if (user.id !== 'bot' && !isAdminUser(user.id) && user.role === 'admin') {
+        user.role = 'user';
+        io.emit('user:updated', db.sanitizeUserOutput(user));
+      }
+    }
     return res.json({ ok: true, status: 'admin_off' });
   }
   if (action === 'status') {
