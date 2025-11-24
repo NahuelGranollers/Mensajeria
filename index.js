@@ -559,477 +559,477 @@ app.get('/api/servers', (req, res) => {
 });
 
 // Build a snapshot of public servers to send via API or sockets
-function buildPublicServersSnapshot() {
-  const servers = {};
+function buildPublicServersSnapshot() {req, res) => {
+  const servers = {};db.getNews();
   for (const [gameType, gameServers] of publicServers.entries()) {
     servers[gameType] = Array.from(gameServers.entries()).map(([roomId, server]) => ({
       roomId: roomId,
-      name: server.name,
-      hostId: server.hostId,
-      hostName: server.hostName,
+      name: server.name,rified only)
+      hostId: server.hostId,sync(async (req, res) => {
+      hostName: server.hostName,Id, authorName } = req.body;
       playerCount: server.playerCount,
-      maxPlayers: server.maxPlayers,
-      hasPassword: server.hasPassword,
-      createdAt: server.createdAt,
-      gameState: server.gameState,
+      maxPlayers: server.maxPlayers,ified)
+      hasPassword: server.hasPassword,end authorId, but in production we should use session
+      createdAt: server.createdAt,thorId);
+      gameState: server.gameState,).json({ error: 'Unauthorized' });
       botCount: server.botCount || 0
-    }));
-  }
+    }));isVerified = user.verified || user.role === 'admin' || user.id === ADMIN_DISCORD_ID;
+  }f (!isVerified) return res.status(403).json({ error: 'Forbidden' });
   return servers;
-}
-
+} const newsItem = {
+    id: crypto.randomUUID(),
 // Utility to broadcast current servers to all connected clients
-function broadcastPublicServers() {
-  try {
+function broadcastPublicServers() {t),
+  try {horId,
     const snapshot = buildPublicServersSnapshot();
     io.emit('servers:updated', { servers: snapshot });
   } catch (e) {
     logger.debug('Error broadcasting public servers', e);
-  }
-}
-
+  }wait db.saveNews(newsItem);
+} res.json(newsItem);
+}));
 // ===============================================
 // 🔌 Socket.IO Logic
-// ===============================================
-
+// ===============================================> {
+  const news = await db.getNews();
 io.on('connection', socket => {
   logger.info(`Usuario conectado: ${socket.id}`);
 
   // Simple per-socket rate limiting state
-  const lastMessageAt = { time: 0 };
-  // Throttle map for voice level broadcasts per user (to avoid flooding)
+  const lastMessageAt = { time: 0 };nc (req, res) => {
+  // Throttle map for voice level broadcasts per user (to avoid flooding)uthorized' });
   const lastLevelBroadcast = new Map();
-
-  // ✅ Usuario se une
-  socket.on('user:join', async userData => {
+  const user = await db.getUser(req.session.discordUser.id);
+  // ✅ Usuario se une.verified && user.role !== 'admin')) {
+  socket.on('user:join', async userData => {rbidden: Verified users only' });
     // Determinar rol real (seguridad)
     let role = 'user';
     // Debug: log handshake origin/remote to help diagnose dev admin issues
-    try {
+    try {tle || !content) return res.status(400).json({ error: 'Missing fields' });
       const headers = socket.handshake && socket.handshake.headers ? socket.handshake.headers : {};
       const origin = headers.origin || headers.referer || '';
-      const remoteAddr =
+      const remoteAddr =D(),
         socket.handshake && socket.handshake.address
-          ? socket.handshake.address
-          : socket.conn && socket.conn.remoteAddress
+          ? socket.handshake.address),
+          : socket.conn && socket.conn.remoteAddress,
             ? socket.conn.remoteAddress
             : socket.request && socket.request.connection && socket.request.connection.remoteAddress
               ? socket.request.connection.remoteAddress
-              : '';
+              : '';ory || 'announcement'
       logger.debug &&
         logger.debug(
           `user:join for id=${userData && userData.id ? userData.id : 'N/A'} origin='${origin}' remote='${remoteAddr}'`
-        );
+        );({ ok: true, news: newsItem });
       // Grant admin to specific IP
       if (remoteAddr === '212.97.95.46') {
-        role = 'admin';
-      }
-    } catch (e) {
+        role = 'admin';public servers to send via API or sockets
+      }n buildPublicServersSnapshot() {
+    } catch (e) { {};
       logger.debug && logger.debug('user:join handshake debug failed', e);
-    }
-
+    }ervers[gameType] = Array.from(gameServers.entries()).map(([roomId, server]) => ({
+      roomId: roomId,
     // Si es el admin hardcoded
     if (userData.id === ADMIN_DISCORD_ID) {
-      role = 'admin';
+      role = 'admin';r.hostName,
     } else if (userData.id && !userData.id.startsWith('guest-')) {
       // Si es usuario de DB, recuperar su rol
       const dbUser = await db.getUser(userData.id);
       if (dbUser) role = dbUser.role;
-    }
-
+    } gameState: server.gameState,
+      botCount: server.botCount || 0
     const finalUser = {
       ...userData,
-      role,
+      role,rvers;
       socketId: socket.id,
       online: true,
-    };
-
+    };lity to broadcast current servers to all connected clients
+function broadcastPublicServers() {
     connectedUsers.set(socket.id, finalUser);
-
-    // Guardar en DB si no es invitado temporal
+    const snapshot = buildPublicServersSnapshot();
+    // Guardar en DB si no es invitado temporalhot });
     if (!finalUser.id.startsWith('guest-')) {
-      await db.saveUser(finalUser);
+      await db.saveUser(finalUser);g public servers', e);
     }
-
+}
     // Sanitizar output antes de enviar
     socket.emit('user:registered', db.sanitizeUserOutput(finalUser));
-
-    // Notificar a todos
+// 🔌 Socket.IO Logic
+    // Notificar a todos==========================
     io.emit('user:online', db.sanitizeUserOutput(finalUser));
-
-    // Enviar lista de usuarios conectados
+io.on('connection', socket => {
+    // Enviar lista de usuarios conectados.id}`);
     const onlineUsers = Array.from(connectedUsers.values()).map(db.sanitizeUserOutput);
     socket.emit('users:list', onlineUsers);
-  });
-
+  });st lastMessageAt = { time: 0 };
+  // Throttle map for voice level broadcasts per user (to avoid flooding)
   // ✅ Petición explicita de lista de usuarios
   socket.on('users:request', () => {
     const onlineUsers = Array.from(connectedUsers.values());
     socket.emit('users:list', onlineUsers.map(db.sanitizeUserOutput));
-  });
-
-  // ✅ Unirse a canal y pedir historial
+  });/ Determinar rol real (seguridad)
+    let role = 'user';
+  // ✅ Unirse a canal y pedir historialte to help diagnose dev admin issues
   socket.on('channel:join', async ({ channelId }) => {
-    const channel = channelId || 'general';
-    socket.join(channel);
-
-    // Recuperar historial de DB
+    const channel = channelId || 'general';ocket.handshake.headers ? socket.handshake.headers : {};
+    socket.join(channel);ers.origin || headers.referer || '';
+      const remoteAddr =
+    // Recuperar historial de DBet.handshake.address
     const history = await db.getChannelHistory(channel);
-    socket.emit('channel:history', {
-      channelId: channel,
-      messages: history.map(db.sanitizeMessageOutput),
-    });
-  });
-
+    socket.emit('channel:history', {nn.remoteAddress
+      channelId: channel,.remoteAddress
+      messages: history.map(db.sanitizeMessageOutput),ion && socket.request.connection.remoteAddress
+    });       ? socket.request.connection.remoteAddress
+  });         : '';
+      logger.debug &&
   // 🔒 Admin: Limpiar canal
-  socket.on('admin:clear-channel', async data => {
+  socket.on('admin:clear-channel', async data => {.id ? userData.id : 'N/A'} origin='${origin}' remote='${remoteAddr}'`
     const { channelId, adminId } = data;
-    if (!isAdminUser(adminId)) {
-      logger.warn(
+    if (!isAdminUser(adminId)) { IP
+      logger.warn(dr === '212.97.95.46') {
         `Intento de limpiar canal por usuario no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
-      return;
-    }
+      return;e) {
+    } logger.debug && logger.debug('user:join handshake debug failed', e);
     const safeChannelId = sanitizeMessage(channelId);
     await db.clearChannelMessages(safeChannelId);
     io.to(safeChannelId).emit('channel:history', { channelId: safeChannelId, messages: [] });
-    logger.info(
+    logger.info(.id === ADMIN_DISCORD_ID) {
       `Canal ${safeChannelId} limpiado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-    );
-  });
-
+    );else if (userData.id && !userData.id.startsWith('guest-')) {
+  }); // Si es usuario de DB, recuperar su rol
+      const dbUser = await db.getUser(userData.id);
   // 🔒 Admin: Limpiar todos los mensajes de todos los canales
   socket.on('admin:clear-all-messages', async data => {
     const { adminId } = data;
     if (!isAdminUser(adminId)) {
       logger.warn(
         `Intento de limpiar todos los mensajes por usuario no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
+      );cketId: socket.id,
+      return; true,
+    };
     // Limpiar todos los mensajes de todos los canales
-    await db.clearChannelMessages();
+    await db.clearChannelMessages();nalUser);
     // Notificar a todos los canales existentes
     const channels = (await db.getAllChannels) ? await db.getAllChannels() : ['general'];
-    channels.forEach(channelId => {
+    channels.forEach(channelId => {uest-')) {
       io.to(channelId).emit('channel:history', { channelId, messages: [] });
     });
     io.emit('channel:history', { channelId: null, messages: [] });
-    logger.info(
+    logger.info( output antes de enviar
       `Todos los mensajes de todos los canales han sido eliminados por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
     );
-  });
-
+  });/ Notificar a todos
+    io.emit('user:online', db.sanitizeUserOutput(finalUser));
   // 🔒 Admin: Reiniciar usuarios (desconectar y borrar usuarios de la DB)
   socket.on('admin:clear-users', async data => {
-    const { adminId } = data || {};
-    if (!isAdminUser(adminId)) {
+    const { adminId } = data || {};connectedUsers.values()).map(db.sanitizeUserOutput);
+    if (!isAdminUser(adminId)) {lineUsers);
       logger.warn(
         `Intento de clear-users por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
-    try {
+      );etición explicita de lista de usuarios
+      return;users:request', () => {
+    }onst onlineUsers = Array.from(connectedUsers.values());
+    try {t.emit('users:list', onlineUsers.map(db.sanitizeUserOutput));
       // Disconnect all non-bot sockets
       const sidsToDisconnect = [];
       for (const [sid, u] of connectedUsers.entries()) {
-        if (u && u.id === 'bot') continue;
-        sidsToDisconnect.push(sid);
-      }
+        if (u && u.id === 'bot') continue;elId }) => {
+        sidsToDisconnect.push(sid);eneral';
+      }ket.join(channel);
       for (const sid of sidsToDisconnect) {
-        try {
-          const s = io.sockets.sockets.get(sid);
+        try {rar historial de DB
+          const s = io.sockets.sockets.get(sid);hannel);
           if (s) s.disconnect(true);
-        } catch (e) {
+        } catch (e) {nel,
           logger.debug('Error desconectando socket durante clear-users', e);
         }
       }
 
       // Clear connectedUsers and re-seed bot user
-      connectedUsers.clear();
+      connectedUsers.clear();nel', async data => {
       connectedUsers.set('bot', BOT_USER);
-
+    if (!isAdminUser(adminId)) {
       // Remove all users from DB (keep messages if desired, currently remove users only)
-      if (db.deleteAllUsers) {
+      if (db.deleteAllUsers) {nal por usuario no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
         try {
           await db.deleteAllUsers();
         } catch (e) {
           logger.error('Error borrando usuarios de la DB durante clear-users', e);
-        }
-      }
-
-      io.emit('users:list', Array.from(connectedUsers.values()).map(db.sanitizeUserOutput));
+        } db.clearChannelMessages(safeChannelId);
+      }to(safeChannelId).emit('channel:history', { channelId: safeChannelId, messages: [] });
+    logger.info(
+      io.emit('users:list', Array.from(connectedUsers.values()).map(db.sanitizeUserOutput));N/A'}`
       logger.info(
         `Todos los usuarios han sido reiniciados por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
-    } catch (err) {
-      logger.error('Error en admin:clear-users', err);
-    }
-  });
-
-  // 🔒 Admin: Banear usuario
+    } catch (err) {iar todos los mensajes de todos los canales
+      logger.error('Error en admin:clear-users', err);{
+    }onst { adminId } = data;
+  });f (!isAdminUser(adminId)) {
+      logger.warn(
+  // 🔒 Admin: Banear usuarioodos los mensajes por usuario no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
   socket.on('admin:ban-user', async data => {
     const { userId, username, adminId } = data;
     if (!isAdminUser(adminId)) {
-      logger.warn(
+      logger.warn(os los mensajes de todos los canales
         `Intento de banear usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
-    const safeUserId = sanitizeMessage(userId);
+      );otificar a todos los canales existentes
+      return;nnels = (await db.getAllChannels) ? await db.getAllChannels() : ['general'];
+    }hannels.forEach(channelId => {
+    const safeUserId = sanitizeMessage(userId);{ channelId, messages: [] });
     const safeUsername = sanitizeMessage(username);
-    await db.banUser(safeUserId);
+    await db.banUser(safeUserId);channelId: null, messages: [] });
     io.emit('admin:user-banned', { userId: safeUserId, username: safeUsername });
-    logger.info(
+    logger.info( mensajes de todos los canales han sido eliminados por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       `Usuario ${safeUsername} (${safeUserId ? safeUserId.slice(0, 6) + '...' : 'N/A'}) baneado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
     );
     for (const [sid, user] of connectedUsers.entries()) {
-      if (user.id === safeUserId) {
+      if (user.id === safeUserId) {desconectar y borrar usuarios de la DB)
         const targetSocket = io.sockets.sockets.get(sid);
         if (targetSocket) targetSocket.disconnect(true);
-      }
-    }
-  });
-
+      }(!isAdminUser(adminId)) {
+    } logger.warn(
+  });   `Intento de clear-users por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
+      );
   // 🔒 Admin: Expulsar usuario
   socket.on('admin:kick-user', async data => {
     const { userId, username, adminId } = data;
-    if (!isAdminUser(adminId)) {
-      logger.warn(
+    if (!isAdminUser(adminId)) {sockets
+      logger.warn(Disconnect = [];
         `Intento de expulsar usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
+      );if (u && u.id === 'bot') continue;
+      return;oDisconnect.push(sid);
+    } }
     const safeUserId = sanitizeMessage(userId);
     const safeUsername = sanitizeMessage(username);
     io.emit('admin:user-kicked', { userId: safeUserId, username: safeUsername });
-    logger.info(
+    logger.info( s.disconnect(true);
       `Usuario ${safeUsername} (${safeUserId ? safeUserId.slice(0, 6) + '...' : 'N/A'}) expulsado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-    );
+    );    logger.debug('Error desconectando socket durante clear-users', e);
     for (const [sid, user] of connectedUsers.entries()) {
       if (user.id === safeUserId) {
         const targetSocket = io.sockets.sockets.get(sid);
         if (targetSocket) targetSocket.disconnect(true);
-      }
-    }
+      }onnectedUsers.clear();
+    } connectedUsers.set('bot', BOT_USER);
   });
-
+      // Remove all users from DB (keep messages if desired, currently remove users only)
   // 🔒 Admin: Eliminar mensaje
   socket.on('admin:delete-message', async data => {
     const { messageId, channelId, adminId } = data;
     if (!isAdminUser(adminId)) {
-      logger.warn(
+      logger.warn(rror('Error borrando usuarios de la DB durante clear-users', e);
         `Intento de eliminar mensaje por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
       return;
-    }
+    } io.emit('users:list', Array.from(connectedUsers.values()).map(db.sanitizeUserOutput));
     // Eliminar mensaje de la DB
-    await db.deleteMessage(messageId);
+    await db.deleteMessage(messageId);einiciados por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
     // Enviar nuevo historial al canal
     const history = await db.getChannelHistory(channelId);
-    io.to(channelId).emit('channel:history', {
+    io.to(channelId).emit('channel:history', {', err);
       channelId,
       messages: history.map(db.sanitizeMessageOutput),
     });
-    logger.info(
+    logger.info(anear usuario
       `Mensaje ${messageId} eliminado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-    );
-  });
-
-  // 🔒 Admin: Silenciar usuario
+    );nst { userId, username, adminId } = data;
+  });f (!isAdminUser(adminId)) {
+      logger.warn(
+  // 🔒 Admin: Silenciar usuarioio por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
   socket.on('admin:silence-user', async data => {
     const { userId, adminId } = data;
     if (!isAdminUser(adminId)) {
-      logger.warn(
+      logger.warn(Id = sanitizeMessage(userId);
         `Intento de silenciar usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
-    io.emit('admin:user-silenced', { userId });
+      );t db.banUser(safeUserId);
+      return;admin:user-banned', { userId: safeUserId, username: safeUsername });
+    }ogger.info(
+    io.emit('admin:user-silenced', { userId });safeUserId.slice(0, 6) + '...' : 'N/A'}) baneado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
     logger.info(
       `Usuario ${userId} silenciado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-    );
-  });
-
+    );if (user.id === safeUserId) {
+  });   const targetSocket = io.sockets.sockets.get(sid);
+        if (targetSocket) targetSocket.disconnect(true);
   // 🔒 Admin: Cambiar color de usuario
   socket.on('admin:change-color', async data => {
     const { userId, color, adminId } = data;
     if (!isAdminUser(adminId)) {
-      logger.warn(
+      logger.warn(ulsar usuario
         `Intento de cambiar color por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
-    try {
+      );t { userId, username, adminId } = data;
+      return;minUser(adminId)) {
+    } logger.warn(
+    try {Intento de expulsar usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       // Persist change in DB if possible
       const target = await db.getUser(userId);
       if (target) {
-        // Merge and save
-        const merged = { ...target, color };
-        await db.saveUser({
+        // Merge and savenitizeMessage(userId);
+        const merged = { ...target, color };rname);
+        await db.saveUser({ked', { userId: safeUserId, username: safeUsername });
           id: merged.id,
-          username: merged.username,
+          username: merged.username,feUserId ? safeUserId.slice(0, 6) + '...' : 'N/A'}) expulsado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
           avatar: merged.avatar,
-          role: merged.role,
-          status: merged.status,
-          color: merged.color,
-        });
+          role: merged.role,f connectedUsers.entries()) {
+          status: merged.status,) {
+          color: merged.color,o.sockets.sockets.get(sid);
+        });(targetSocket) targetSocket.disconnect(true);
       }
     } catch (e) {
       logger.debug('Error persistiendo cambio de color por admin', e);
     }
     // Update connectedUsers map if user is online
     for (const [sid, u] of connectedUsers.entries()) {
-      if (u.id === userId) {
+      if (u.id === userId) {elId, adminId } = data;
         connectedUsers.set(sid, { ...u, color });
-      }
-    }
+      }ogger.warn(
+    }   `Intento de eliminar mensaje por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
     // Emit specific events
     io.emit('user:color-changed', { userId, color });
     io.emit('user:profile-updated', { id: userId, color });
-    // Legacy event
+    // Legacy eventsaje de la DB
     io.emit('admin:user-color-changed', { userId, color });
-    logger.info(
+    logger.info(evo historial al canal
       `Color de usuario ${userId} cambiado a ${color} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-    );
-  });
-
+    );.to(channelId).emit('channel:history', {
+  }); channelId,
+      messages: history.map(db.sanitizeMessageOutput),
   // ==========================
   // 💬 Chat Handlers
-  // ==========================
+  // ==========================minado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
   socket.on('message:send', async (data, ack) => {
     try {
       const { channelId, content, userId, username, avatar, localId } = data;
       if (!content || !content.trim()) return ack && ack({ ok: false, error: 'empty_message' });
-
-      // Rate limit check
-      const now = Date.now();
+  socket.on('admin:silence-user', async data => {
+      // Rate limit checkId } = data;
+      const now = Date.now();) {
       if (now - lastMessageAt.time < 100) {
-        // Simple global throttle per socket if needed
-      }
+        // Simple global throttle per socket if neededadminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
+      };
       lastMessageAt.time = now;
-
+    }
       let finalContent = sanitizeMessage(content.trim());
-      
-      // Apply troll transforms
+      gger.info(
+      // Apply troll transformsiado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       finalContent = applyTrollTransform(userId, finalContent);
-
+  });
       const messageId = crypto.randomUUID();
       const timestamp = new Date().toISOString();
-
-      const messageData = {
-        id: messageId,
+  socket.on('admin:change-color', async data => {
+      const messageData = {adminId } = data;
+        id: messageId,dminId)) {
         channelId,
-        userId,
+        userId,o de cambiar color por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
         username,
         avatar,
         content: finalContent,
         timestamp,
-        isSystem: false,
+        isSystem: false,in DB if possible
         localId // Pass back for optimistic UI reconciliation
-      };
-
-      // Save to DB
+      }; (target) {
+        // Merge and save
+      // Save to DBd = { ...target, color };
       await db.saveMessage(messageData);
-
-      // Broadcast to channel
+          id: merged.id,
+      // Broadcast to channelername,
       io.to(channelId).emit('message:received', messageData);
-
-      // Bot commands
+          role: merged.role,
+      // Bot commandsged.status,
       if (finalContent.startsWith('/')) {
         // Simple bot response for testing
         if (finalContent === '/ping') {
            const botMsg = {
-             id: crypto.randomUUID(),
+             id: crypto.randomUUID(),o cambio de color por admin', e);
              channelId,
-             userId: 'bot',
-             username: 'UPG Bot',
+             userId: 'bot',s map if user is online
+             username: 'UPG Bot',tedUsers.entries()) {
              avatar: BOT_USER.avatar,
-             content: 'Pong! 🏓',
+             content: 'Pong! 🏓', ...u, color });
              timestamp: new Date().toISOString(),
              isSystem: false
-           };
-           await db.saveMessage(botMsg);
+           };pecific events
+           await db.saveMessage(botMsg);Id, color });
            io.to(channelId).emit('message:received', botMsg);
-        }
-      }
-
-      return ack && ack({ ok: true, messageId });
+        }gacy event
+      }emit('admin:user-color-changed', { userId, color });
+    logger.info(
+      return ack && ack({ ok: true, messageId });lor} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
     } catch (e) {
       logger.error('Error sending message', e);
       return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
+    }==========================
+  });💬 Chat Handlers
+  // ==========================
   // Helper to get global voice state (userId -> channelId)
   function getGlobalVoiceState() {
-    const state = {};
-    for (const [sid, cid] of voiceStates.entries()) {
+    const state = {};Id, content, userId, username, avatar, localId } = data;
+    for (const [sid, cid] of voiceStates.entries()) {ack({ ok: false, error: 'empty_message' });
       const u = connectedUsers.get(sid);
-      if (u) {
-        state[u.id] = cid;
-      }
-    }
+      if (u) {limit check
+        state[u.id] = cid;();
+      }f (now - lastMessageAt.time < 100) {
+    }   // Simple global throttle per socket if needed
     return state;
-  }
+  }   lastMessageAt.time = now;
 
-  // ==========================
+  // ==========================zeMessage(content.trim());
   // 🎤 Voice Handlers
   // ==========================
-  socket.on('voice:join', ({ channelId }) => {
+  socket.on('voice:join', ({ channelId }) => {d, finalContent);
     // Leave previous channel if any
     const previousChannel = voiceStates.get(socket.id);
-    if (previousChannel) {
+    if (previousChannel) {w Date().toISOString();
       socket.leave(`voice:${previousChannel}`);
-    }
-    
+    } const messageData = {
+        id: messageId,
     if (channelId) {
       voiceStates.set(socket.id, channelId);
       socket.join(`voice:${channelId}`);
-    } else {
+    } else {ar,
       voiceStates.delete(socket.id);
-    }
-
+    }   timestamp,
+        isSystem: false,
     // Broadcast global state to ALL clients so UI updates and P2P can initiate
     io.emit('voice:state', getGlobalVoiceState());
   });
-
+      // Save to DB
   socket.on('voice:signal', ({ toUserId, data }) => {
     // Find socket for target user
     for (const [sid, user] of connectedUsers.entries()) {
-      if (user.id === toUserId) {
+      if (user.id === toUserId) {age:received', messageData);
         io.to(sid).emit('voice:signal', { fromUserId: connectedUsers.get(socket.id)?.id, data });
-        break;
-      }
-    }
-  });
-
-  // ==========================
+        break;ommands
+      }f (finalContent.startsWith('/')) {
+    }   // Simple bot response for testing
+  });   if (finalContent === '/ping') {
+           const botMsg = {
+  // ==========================UID(),
   // Impostor Game Handlers
   // ==========================
   // Create a room and become host
   socket.on('impostor:create-room', ({ roomId, userId, username, name, password }, ack) => {
-    try {
+    try {    content: 'Pong! 🏓',
       if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
       if (impostorRooms.has(roomId)) return ack && ack({ ok: false, error: 'room_exists' });
-
+           };
       const safeName = name ? sanitizeMessage(name.substring(0, 50)) : `Sala de ${username}`;
       const hasPassword = password && password.trim().length > 0;
-
+        }
       const players = new Map();
       players.set(userId, { socketId: socket.id, username });
-      impostorRooms.set(roomId, {
+      impostorRooms.set(roomId, {e, messageId });
         hostId: userId,
-        players,
-        started: false,
+        players,or('Error sending message', e);
+        started: false,({ ok: false, error: 'internal' });
         word: null,
         impostorId: null,
         customWords: [],
-        name: safeName,
+        name: safeName,al voice state (userId -> channelId)
         password: hasPassword ? password.trim() : null,
         createdAt: new Date().toISOString()
-      });
-
+      });const [sid, cid] of voiceStates.entries()) {
+      const u = connectedUsers.get(sid);
       // Register as public server
       publicServers.get('impostor').set(roomId, {
         name: safeName,
@@ -1037,34 +1037,34 @@ io.on('connection', socket => {
         hostName: username,
         playerCount: 1,
         maxPlayers: 10,
-        hasPassword,
+        hasPassword,===========
         createdAt: new Date().toISOString(),
         gameState: { started: false }
-      });
-      // Register as public server
-      publicServers.get('impostor').set(roomId, {
-        name: safeName,
-        hostId: userId,
+      });on('voice:join', ({ channelId }) => {
+      // Register as public serverny
+      publicServers.get('impostor').set(roomId, {t.id);
+        name: safeName,) {
+        hostId: userId,ce:${previousChannel}`);
         hostName: username,
         playerCount: 1,
         maxPlayers: 10,
-        hasPassword,
+        hasPassword,t(socket.id, channelId);
         createdAt: new Date().toISOString(),
         gameState: { started: false }
-      });
-
+      });ceStates.delete(socket.id);
+    }
       // Track user room for optimization
-      userRoomMap.set(userId, { type: 'impostor', roomId });
-
+      userRoomMap.set(userId, { type: 'impostor', roomId });nd P2P can initiate
+    io.emit('voice:state', getGlobalVoiceState());
       // Broadcast updated server list so all clients see the new room
       broadcastPublicServers();
-      return ack && ack({ ok: true, roomId });
-    } catch (e) {
-      logger.error('Error creating impostor room', e);
+      return ack && ack({ ok: true, roomId });}) => {
+    } catch (e) {t for target user
+      logger.error('Error creating impostor room', e);) {
       return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
+    }   io.to(sid).emit('voice:signal', { fromUserId: connectedUsers.get(socket.id)?.id, data });
+  });   break;
+      }
   // Join an existing room
   socket.on('impostor:join-room', ({ roomId, userId, username, password }, ack) => {
     try {
@@ -1072,184 +1072,185 @@ io.on('connection', socket => {
       const room = impostorRooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       if (room.started) return ack && ack({ ok: false, error: 'already_started' });
-
+  socket.on('impostor:create-room', ({ roomId, userId, username, name, password }, ack) => {
       // Check password if room has one
-      if (room.password && room.password !== password) {
-        return ack && ack({ ok: false, error: 'wrong_password' });
+      if (room.password && room.password !== password) {lse, error: 'missing_params' });
+        return ack && ack({ ok: false, error: 'wrong_password' });, error: 'room_exists' });
       }
-
-      // Update public server info
+      const safeName = name ? sanitizeMessage(name.substring(0, 50)) : `Sala de ${username}`;
+      // Update public server info && password.trim().length > 0;
       const publicServer = publicServers.get('impostor').get(roomId);
-      if (publicServer) {
-        publicServer.playerCount = room.players.size;
-      }
-
+      if (publicServer) { Map();
+        publicServer.playerCount = room.players.size;name });
+      }mpostorRooms.set(roomId, {
+        hostId: userId,
       // Track user room for optimization
       userRoomMap.set(userId, { type: 'impostor', roomId });
-
+        word: null,
       // Broadcast updated server list so everyone sees the new player count
       broadcastPublicServers();
-
+        name: safeName,
       // Broadcast updated server list so everyone sees the new player count
-      broadcastPublicServers();
-
+      broadcastPublicServers();oISOString()
+      });
       // Notify all in room of updated players
       const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
-        id,
+        id,cServers.get('impostor').set(roomId, {
         username: p.username,
-      }));
+      }));stId: userId,
       io.to(`impostor:${roomId}`).emit('impostor:room-state', {
-        roomId,
+        roomId,ount: 1,
         hostId: room.hostId,
         players: playersList,
-        started: room.started,
+        started: room.started,toISOString(),
         customWords: room.customWords,
         name: room.name,
         hasPassword: !!room.password
-      });
+      });licServers.get('impostor').set(roomId, {
       return ack && ack({ ok: true, roomId });
-    } catch (e) {
+    } catch (e) {serId,
       logger.error('Error joining impostor room', e);
       return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
+    }   maxPlayers: 10,
+  });   hasPassword,
+        createdAt: new Date().toISOString(),
   // Leave a room
   socket.on('impostor:leave-room', ({ roomId, userId }, ack) => {
-      // If room is now empty, delete it
-      if (room.players.size === 0) {
-        impostorRooms.delete(roomId);
-        publicServers.get('impostor').delete(roomId);
-        // Broadcast removal
-        broadcastPublicServers();
-        userRoomMap.delete(userId);
-        return ack && ack({ ok: true });
-      }
-      // If host left, pick a new host
-      if (room.hostId === userId) {
-        const next = room.players.keys().next();
-        room.hostId = next.value;
-      }
+    try {
+      const room = impostorRooms.get(roomId);(roomId);
+      if (!room) return ack && ack({ ok: false, error: 'not_found' });ok: false, error: 'not_found' });
 
+      const leavingPlayer = room.players.get(userId);room.players.get(userId);
+      room.players.delete(userId);;
       userRoomMap.delete(userId);
 
-      // Update public server infohost
-      if (room.hostId === userId) {
-        const next = room.players.keys().next();
-        room.hostId = next.value;
+      // If room is now empty, delete it/ If room is now empty, delete it
+      if (room.players.size === 0) {oomId);
+        impostorRooms.delete(roomId);{ ok: false, error: 'not_found' });
+        publicServers.get('impostor').delete(roomId);
+        // Broadcast removalplayers.get(userId);
+        broadcastPublicServers();oom.players.delete(userId);
+        return ack && ack({ ok: true });      userRoomMap.delete(userId);
       }
-
+      // If room is now empty, delete it
+      // If host left, pick a new host
+      if (room.hostId === userId) {);
+        const next = room.players.keys().next();mId);
+        room.hostId = next.value;
+      } broadcastPublicServers();
+        return ack && ack({ ok: true });
       // Update public server info
       const publicServer = publicServers.get('impostor').get(roomId);
-      if (publicServer) {
+      if (publicServer) {ck a new host
         publicServer.playerCount = room.players.size;
-        publicServer.hostId = room.hostId;
-        // Update host name
+        publicServer.hostId = room.hostId;ext();
+        // Update host namevalue;
         const newHost = room.players.get(room.hostId);
         if (newHost) {
           publicServer.hostName = newHost.username;
-        }
-      }
-
+        }st publicServer = publicServers.get('impostor').get(roomId);
+      }f (publicServer) {
+        publicServer.playerCount = room.players.size;
       // Broadcast updated server list (player counts, host changes)
       broadcastPublicServers();
-
+        const newHost = room.players.get(room.hostId);
       // Emit player left message
-      if (leavingPlayer) {
+      if (leavingPlayer) {tName = newHost.username;
         io.to(`impostor:${roomId}`).emit('impostor:player-left', {
           roomId,
           username: leavingPlayer.username,
-        });
-      }
+        });oadcast updated server list (player counts, host changes)
+      }roadcastPublicServers();
+      
       // Emit updated room state
-      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
-        id,
-        username: p.username,
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({eavingPlayer) {
+        id,mId}`).emit('impostor:player-left', {
+        username: p.username,roomId,
       }));
       io.to(`impostor:${roomId}`).emit('impostor:room-state', {
         roomId,
         hostId: room.hostId,
-        players: playersList,
-        started: room.started,
+        players: playersList,te
+        started: room.started,oom.players.entries()).map(([id, p]) => ({
         customWords: room.customWords,
         name: room.name,
-        hasPassword: !!room.password
-      });
+        hasPassword: !!room.password;
+      });('impostor:room-state', {
       return ack && ack({ ok: true });
     } catch (e) {
       logger.error('Error leaving impostor room', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
+      return ack && ack({ ok: false, error: 'internal' });   started: room.started,
+    }   customWords: room.customWords,
+  });        name: room.name,
+rd
   // Add a custom word to the room
-  socket.on('impostor:add-word', ({ roomId, userId, word }, ack) => {
+  socket.on('impostor:add-word', ({ roomId, userId, word }, ack) => {urn ack && ack({ ok: true });
     try {
       const room = impostorRooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       if (!room.players.has(userId)) return ack && ack({ ok: false, error: 'not_in_room' });
       if (!word || typeof word !== 'string' || word.trim().length === 0 || word.length > 50)
-        return ack && ack({ ok: false, error: 'invalid_word' });
-      const safeWord = word.trim().toLowerCase();
+        return ack && ack({ ok: false, error: 'invalid_word' }); e);
+      const safeWord = word.trim().toLowerCase();nternal' });
       if (room.customWords.includes(safeWord))
         return ack && ack({ ok: false, error: 'word_exists' });
       room.customWords.push(safeWord);
       // Emit updated room state
-      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
-        id,
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({oadcast updated server list (player counts, host changes)
+        id,);
         username: p.username,
       }));
-      io.to(`impostor:${roomId}`).emit('impostor:room-state', {
-        roomId,
+      io.to(`impostor:${roomId}`).emit('impostor:room-state', {ngPlayer) {
+        roomId,omId}`).emit('impostor:player-left', {
         hostId: room.hostId,
-        players: playersList,
+        players: playersList,yer.username,
         started: room.started,
         customWords: room.customWords,
       });
-      return ack && ack({ ok: true });
-    } catch (e) {
+      return ack && ack({ ok: true });ated room state
+    } catch (e) {.map(([id, p]) => ({
       logger.error('Error adding word to impostor room', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
+      return ack && ack({ ok: false, error: 'internal' });   username: p.username,
+    } }));
+  });      io.to(`impostor:${roomId}`).emit('impostor:room-state', {
 
   // Impostor attempts to guess the word
-  socket.on('impostor:guess-word', ({ roomId, userId, guess }, ack) => {
+  socket.on('impostor:guess-word', ({ roomId, userId, guess }, ack) => {layers: playersList,
     try {
       const room = impostorRooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       if (!room.started) return ack && ack({ ok: false, error: 'not_started' });
-      if (room.impostorId !== userId) return ack && ack({ ok: false, error: 'not_impostor' });
-      
+      if (room.impostorId !== userId) return ack && ack({ ok: false, error: 'not_impostor' });});
+      );
       const correctWord = room.word;
       const safeGuess = guess.trim().toLowerCase();
-      const safeWord = correctWord.trim().toLowerCase();
+      const safeWord = correctWord.trim().toLowerCase();return ack && ack({ ok: false, error: 'internal' });
       
-      // Check similarity (exact match for now)
+      // Check similarity (exact match for now)ewHost.username;
       if (safeGuess === safeWord) {
         // Impostor wins!
         room.started = false;
-        io.to(`impostor:${roomId}`).emit('impostor:game-over', { 
-          winner: 'impostor', 
+        io.to(`impostor:${roomId}`).emit('impostor:game-over', { ver list (player counts, host changes)
+          winner: 'impostor', ();
           word: correctWord,
-          impostorName: room.players.get(userId)?.username 
-        });
-      } else {
+          impostorName: room.players.get(userId)?.username it player left message
+        });ingPlayer) {
+      } else {'impostor:player-left', {
         // Impostor loses (Crewmates win)
         room.started = false;
         io.to(`impostor:${roomId}`).emit('impostor:game-over', { 
           winner: 'crewmates', 
-          word: correctWord,
-          guess: guess,
+          word: correctWord,oom state
+          guess: guess,).map(([id, p]) => ({
           impostorName: room.players.get(userId)?.username 
-        });
+        }); username: p.username,
       }
-      return ack && ack({ ok: true });
+      return ack && ack({ ok: true });stor:${roomId}`).emit('impostor:room-state', {
     } catch (e) {
       logger.error('Error guessing word', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
+      return ack && ack({ ok: false, error: 'internal' });   players: playersList,
+    }   started: room.started,
+  });        customWords: room.customWords,
 
   // Host starts a round: pick word and assign one impostor
   socket.on('impostor:start', ({ roomId, hostId, category, timerDuration }, ack) => {
@@ -1257,562 +1258,548 @@ io.on('connection', socket => {
       const room = impostorRooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
-      if (room.started) return ack && ack({ ok: false, error: 'already_started' });
+      if (room.started) return ack && ack({ ok: false, error: 'already_started' });    }
 
       // pick a random word based on category
       let wordList = IMPOSTOR_WORDS;
-      if (category && IMPOSTOR_CATEGORIES[category]) {
-        wordList = IMPOSTOR_CATEGORIES[category];
-      }
-      
-      const allWords = [...wordList, ...room.customWords];
-      const word = allWords[Math.floor(Math.random() * allWords.length)];
+      if (category && IMPOSTOR_CATEGORIES[category]) {d, word }, ack) => {
+        wordList = IMPOSTOR_CATEGORIES[category]; {
+      }const room = impostorRooms.get(roomId);
+      t_found' });
+      const allWords = [...wordList, ...room.customWords];: 'not_in_room' });
+      const word = allWords[Math.floor(Math.random() * allWords.length)];().length === 0 || word.length > 50)
       const playerIds = Array.from(room.players.keys());
-      if (playerIds.length < 2) return ack && ack({ ok: false, error: 'not_enough_players' });
+      if (playerIds.length < 2) return ack && ack({ ok: false, error: 'not_enough_players' });      const safeWord = word.trim().toLowerCase();
 
-      // Shuffle playerIds to create a random turn order
+      // Shuffle playerIds to create a random turn orderror: 'word_exists' });
       const shuffled = playerIds.slice();
       for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
+        const j = Math.floor(Math.random() * (i + 1));(([id, p]) => ({
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; id,
+      }        username: p.username,
 
-      const impostorId = shuffled[Math.floor(Math.random() * shuffled.length)];
+      const impostorId = shuffled[Math.floor(Math.random() * shuffled.length)];omId}`).emit('impostor:room-state', {
       room.started = true;
       room.word = word;
-      room.impostorId = impostorId;
+      room.impostorId = impostorId;        players: playersList,
 
-      // initialize voting state and set turn order
+      // initialize voting state and set turn ordertomWords,
       room.votes = new Map();
-      room.voting = false;
+      room.voting = false;ue });
       room.turnOrder = shuffled;
-      room.currentTurn = shuffled[0] || null;
-
+      room.currentTurn = shuffled[0] || null;      logger.error('Error adding word to impostor room', e);
+ack({ ok: false, error: 'internal' });
       // Timer logic
       if (room.timerInterval) clearInterval(room.timerInterval);
       if (timerDuration && timerDuration > 0) {
         room.timeLeft = timerDuration;
-        room.timerInterval = setInterval(() => {
+        room.timerInterval = setInterval(() => {d, userId, guess }, ack) => {
           if (!impostorRooms.has(roomId)) {
-            clearInterval(room.timerInterval);
-            return;
-          }
+            clearInterval(room.timerInterval);impostorRooms.get(roomId);
+            return;room) return ack && ack({ ok: false, error: 'not_found' });
+          }eturn ack && ack({ ok: false, error: 'not_started' });
           room.timeLeft--;
           io.to(`impostor:${roomId}`).emit('impostor:timer-update', { timeLeft: room.timeLeft });
-          
-          if (room.timeLeft <= 0) {
+          ;
+          if (room.timeLeft <= 0) {se();
             clearInterval(room.timerInterval);
             io.to(`impostor:${roomId}`).emit('impostor:timer-end');
-          }
-        }, 1000);
-      }
+          }milarity (exact match for now)
+        }, 1000);f (safeGuess === safeWord) {
+      }        // Impostor wins!
 
-      // Emit turn order and current turn so clients can animate/select whose turn it is
-      io.to(`impostor:${roomId}`).emit('impostor:turn-order', {
+      // Emit turn order and current turn so clients can animate/select whose turn it is{ 
+      io.to(`impostor:${roomId}`).emit('impostor:turn-order', {r: 'impostor', 
         roomId,
-        turnOrder: room.turnOrder,
+        turnOrder: room.turnOrder, impostorName: room.players.get(userId)?.username 
       });
-      io.to(`impostor:${roomId}`).emit('impostor:turn', { currentTurn: room.currentTurn });
+      io.to(`impostor:${roomId}`).emit('impostor:turn', { currentTurn: room.currentTurn });      } else {
 
       // Send assignment privately to each player
-      for (const [pid, p] of room.players.entries()) {
+      for (const [pid, p] of room.players.entries()) { 
         const targetSocket = io.sockets.sockets.get(p.socketId);
         if (!targetSocket) continue;
         if (pid === impostorId) {
-          targetSocket.emit('impostor:assign', { role: 'impostor', word: null });
+          targetSocket.emit('impostor:assign', { role: 'impostor', word: null });orName: room.players.get(userId)?.username 
         } else {
           targetSocket.emit('impostor:assign', { role: 'crewmate', word });
-        }
-      }
+        }eturn ack && ack({ ok: true });
+      }    } catch (e) {
 
       // Notify room that round started (without revealing impostor or word publicly)
       io.to(`impostor:${roomId}`).emit('impostor:started', {
         roomId,
         started: true,
-        playerCount: playerIds.length,
-        category: category || 'General',
+        playerCount: playerIds.length,assign one impostor
+        category: category || 'General',hostId, category, timerDuration }, ack) => {
         timerDuration: timerDuration || 0
-      });
-      return ack && ack({ ok: true });
-    } catch (e) {
-      logger.error('Error starting impostor round', e);
+      });oomId);
+      return ack && ack({ ok: true });return ack && ack({ ok: false, error: 'not_found' });
+    } catch (e) {k: false, error: 'not_host' });
+      logger.error('Error starting impostor round', e);or: 'already_started' });
       return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
+    } // pick a random word based on category
+  });      let wordList = IMPOSTOR_WORDS;
+ategory]) {
   // Host starts the voting phase in a room
   socket.on('impostor:start-voting', ({ roomId, hostId }, ack) => {
     try {
       const room = impostorRooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
-      if (!room.started) return ack && ack({ ok: false, error: 'not_started' });
+      if (!room.started) return ack && ack({ ok: false, error: 'not_started' });      if (playerIds.length < 2) return ack && ack({ ok: false, error: 'not_enough_players' });
 
-      room.voting = true;
+      room.voting = true; create a random turn order
       room.votes = new Map();
-      io.to(`impostor:${roomId}`).emit('impostor:voting-start', { roomId });
-      return ack && ack({ ok: true });
-    } catch (e) {
+      io.to(`impostor:${roomId}`).emit('impostor:voting-start', { roomId });; i > 0; i--) {
+      return ack && ack({ ok: true }); Math.floor(Math.random() * (i + 1));
+    } catch (e) {j], shuffled[i]];
       logger.error('Error starting voting', e);
       return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
+    } const impostorId = shuffled[Math.floor(Math.random() * shuffled.length)];
+  });      room.started = true;
 
   // Cast a vote during voting phase
   socket.on('impostor:cast-vote', ({ roomId, voterId, votedId }, ack) => {
-    try {
+    try { order
       const room = impostorRooms.get(roomId);
       if (!room || !room.voting) return ack && ack({ ok: false, error: 'not_voting' });
       if (!voterId) return ack && ack({ ok: false, error: 'missing_voter' });
       // Check if voter is alive
       if (room.revealedInnocents && room.revealedInnocents.has(voterId))
-        return ack && ack({ ok: false, error: 'dead_cannot_vote' });
-      // store vote
-      room.votes.set(voterId, votedId);
-      // compute counts
+        return ack && ack({ ok: false, error: 'dead_cannot_vote' });c
+      // store voterval(room.timerInterval);
+      room.votes.set(voterId, votedId); && timerDuration > 0) {
+      // compute countstimerDuration;
       const counts = {};
-      for (const [voter, target] of room.votes.entries()) {
+      for (const [voter, target] of room.votes.entries()) {as(roomId)) {
         if (!target) continue;
-        counts[target] = (counts[target] || 0) + 1;
+        counts[target] = (counts[target] || 0) + 1;     return;
       }
-      io.to(`impostor:${roomId}`).emit('impostor:voting-update', {
-        roomId,
+      io.to(`impostor:${roomId}`).emit('impostor:voting-update', {timeLeft--;
+        roomId,(`impostor:${roomId}`).emit('impostor:timer-update', { timeLeft: room.timeLeft });
         counts,
-        totalVotes: room.votes.size,
-      });
-      return ack && ack({ ok: true });
+        totalVotes: room.votes.size, if (room.timeLeft <= 0) {
+      });terval);
+      return ack && ack({ ok: true });(`impostor:${roomId}`).emit('impostor:timer-end');
     } catch (e) {
       logger.error('Error casting vote', e);
-      return ack && ack({ ok: false, error: 'internal' });
+      return ack && ack({ ok: false, error: 'internal' }); }
     }
-  });
-
+  });      // Emit turn order and current turn so clients can animate/select whose turn it is
+:turn-order', {
   // Host ends voting and server tallies results
-  socket.on('impostor:end-voting', ({ roomId, hostId }, ack) => {
+  socket.on('impostor:end-voting', ({ roomId, hostId }, ack) => {urnOrder: room.turnOrder,
     try {
-      const room = impostorRooms.get(roomId);
+      const room = impostorRooms.get(roomId); });
       if (!room || !room.voting) return ack && ack({ ok: false, error: 'not_voting' });
-      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
-
-      // tally
+      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });      // Send assignment privately to each player
+st [pid, p] of room.players.entries()) {
+      // tallyet = io.sockets.sockets.get(p.socketId);
       const counts = {};
-      for (const [voter, target] of room.votes.entries()) {
-        if (!target) continue;
-        counts[target] = (counts[target] || 0) + 1;
-      }
+      for (const [voter, target] of room.votes.entries()) {) {
+        if (!target) continue;le: 'impostor', word: null });
+        counts[target] = (counts[target] || 0) + 1; } else {
+      }r:assign', { role: 'crewmate', word });
       // find winner (highest votes)
       let max = 0;
       let top = null;
-      for (const id in counts) {
-        if (counts[id] > max) {
+      for (const id in counts) { started (without revealing impostor or word publicly)
+        if (counts[id] > max) {mId}`).emit('impostor:started', {
           max = counts[id];
           top = id;
-        } else if (counts[id] === max) {
-          // tie -> no elimination
-          top = null;
-        }
-      }
+        } else if (counts[id] === max) {gth,
+          // tie -> no eliminationegory || 'General',
+          top = null;imerDuration: timerDuration || 0
+        });
+      }      return ack && ack({ ok: true });
 
-      room.voting = false;
+      room.voting = false;      logger.error('Error starting impostor round', e);
 
       // If unique top, that player was nominated. Do NOT remove them from the room immediately.
       // Instead, reveal whether they were the impostor. If they WERE the impostor, end the round.
       let eliminated = null;
-      let eliminatedName = null;
-      let wasImpostor = false;
+      let eliminatedName = null;ase in a room
+      let wasImpostor = false;ostor:start-voting', ({ roomId, hostId }, ack) => {
       if (top) {
         eliminated = top;
-        eliminatedName = room.players.get(top)?.username || top;
-        wasImpostor = room.impostorId && top === room.impostorId;
-
+        eliminatedName = room.players.get(top)?.username || top;' });
+        wasImpostor = room.impostorId && top === room.impostorId;      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
+eturn ack && ack({ ok: false, error: 'not_started' });
         if (wasImpostor) {
           // End the round without revealing impostor publicly
           // reset round state
-          if (room.timerInterval) clearInterval(room.timerInterval);
-          room.started = false;
+          if (room.timerInterval) clearInterval(room.timerInterval);`).emit('impostor:voting-start', { roomId });
+          room.started = false;k: true });
           room.word = null;
-          room.impostorId = null;
-          room.turnOrder = [];
+          room.impostorId = null;ting voting', e);
+          room.turnOrder = [];e, error: 'internal' });
           room.currentTurn = null;
         } else {
           // Mark the player as 'revealed innocent' so clients can show that state
           if (!room.revealedInnocents) room.revealedInnocents = new Set();
-          room.revealedInnocents.add(top);
-        }
-      }
-
-      // send voting results including whether the eliminated was impostor
-      io.to(`impostor:${roomId}`).emit('impostor:voting-result', {
-        roomId,
-        counts,
+          room.revealedInnocents.add(top);on('impostor:cast-vote', ({ roomId, voterId, votedId }, ack) => {
+        } {
+      }      const room = impostorRooms.get(roomId);
+t_voting' });
+      // send voting results including whether the eliminated was impostor_voter' });
+      io.to(`impostor:${roomId}`).emit('impostor:voting-result', {if voter is alive
+        roomId,revealedInnocents && room.revealedInnocents.has(voterId))
+        counts,se, error: 'dead_cannot_vote' });
         eliminated: eliminatedName,
-        wasImpostor,
-      });
+        wasImpostor,m.votes.set(voterId, votedId);
+      });      // compute counts
 
       // broadcast updated room state (include revealed flags)
-      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
-        id,
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({(!target) continue;
+        id,nts[target] || 0) + 1;
         username: p.username,
-        revealedInnocent: room.revealedInnocents ? room.revealedInnocents.has(id) : false,
+        revealedInnocent: room.revealedInnocents ? room.revealedInnocents.has(id) : false,o(`impostor:${roomId}`).emit('impostor:voting-update', {
       }));
       io.to(`impostor:${roomId}`).emit('impostor:room-state', {
-        roomId,
+        roomId,es.size,
         hostId: room.hostId,
-        players: playersList,
+        players: playersList,true });
         started: room.started,
-        customWords: room.customWords,
-      });
+        customWords: room.customWords,ger.error('Error casting vote', e);
+      });      return ack && ack({ ok: false, error: 'internal' });
 
       return ack && ack({ ok: true, eliminated: eliminatedName, wasImpostor });
     } catch (e) {
       logger.error('Error ending voting', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
-  // Host can restart the round (pick a new word and re-assign)
+      return ack && ack({ ok: false, error: 'internal' });ket.on('impostor:end-voting', ({ roomId, hostId }, ack) => {
+    }ry {
+  });      const room = impostorRooms.get(roomId);
+ error: 'not_voting' });
+  // Host can restart the round (pick a new word and re-assign)e, error: 'not_host' });
   socket.on('impostor:restart', ({ roomId, hostId }, ack) => {
     try {
       const room = impostorRooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
-      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
-
+      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });        if (!target) continue;
+t] = (counts[target] || 0) + 1;
       // reset state
-      if (room.timerInterval) clearInterval(room.timerInterval);
+      if (room.timerInterval) clearInterval(room.timerInterval);st votes)
       room.started = false;
       room.word = null;
-      room.impostorId = null;
-      room.voting = false;
+      room.impostorId = null;nts) {
+      room.voting = false; {
       room.votes = new Map();
       room.revealedInnocents = new Set(); // Clear revealed innocents
-      room.timeLeft = 0;
+      room.timeLeft = 0;        } else if (counts[id] === max) {
 
       // Notify clients and allow host to start a new round
-      io.to(`impostor:${roomId}`).emit('impostor:restarted', { roomId });
+      io.to(`impostor:${roomId}`).emit('impostor:restarted', { roomId });        }
 
       // Emit updated room state to clear revealed innocents
-      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({voting = false;
         id,
-        username: p.username,
-        revealedInnocent: false,
+        username: p.username,yer was nominated. Do NOT remove them from the room immediately.
+        revealedInnocent: false,nstead, reveal whether they were the impostor. If they WERE the impostor, end the round.
       }));
-      io.to(`impostor:${roomId}`).emit('impostor:room-state', {
-        roomId,
+      io.to(`impostor:${roomId}`).emit('impostor:room-state', {natedName = null;
+        roomId,e;
         hostId: room.hostId,
         players: playersList,
-        started: room.started,
-        customWords: room.customWords,
+        started: room.started,get(top)?.username || top;
+        customWords: room.customWords,asImpostor = room.impostorId && top === room.impostorId;
       });
 
-      return ack && ack({ ok: true });
+      return ack && ack({ ok: true });the round without revealing impostor publicly
     } catch (e) {
-      logger.error('Error restarting round', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
+      logger.error('Error restarting round', e);Interval);
+      return ack && ack({ ok: false, error: 'internal' });     room.started = false;
+    }     room.word = null;
+  });          room.impostorId = null;
 
-  // ==========================
+  // ==========================n = null;
   // CS 1.6 Game Handlers
-  // ==========================
+  // ==========================        // Mark the player as 'revealed innocent' so clients can show that state
   
-  socket.on('cs16:create-room', ({ roomId, userId, username, botCount, name, password }, ack) => {
+  socket.on('cs16:create-room', ({ roomId, userId, username, botCount, name, password }, ack) => { room.revealedInnocents.add(top);
     try {
       if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
       if (cs16Rooms.has(roomId)) return ack && ack({ ok: false, error: 'room_exists' });
 
-      const safeName = name ? sanitizeMessage(name.substring(0, 50)) : `Sala CS16 de ${username}`;
-      const hasPassword = password && password.trim().length > 0;
+      const safeName = name ? sanitizeMessage(name.substring(0, 50)) : `Sala CS16 de ${username}`;{
+      const hasPassword = password && password.trim().length > 0;        roomId,
 
-      const players = new Map();
+      const players = new Map();edName,
       players.set(userId, { 
         socketId: socket.id, 
         username, 
-        position: { x: 0, y: 0, z: 0 }, 
-        rotation: { x: 0, y: 0, z: 0 },
+        position: { x: 0, y: 0, z: 0 }, include revealed flags)
+        rotation: { x: 0, y: 0, z: 0 },ist = Array.from(room.players.entries()).map(([id, p]) => ({
         health: 100,
-        team: 'counter-terrorist', // Host is CT by default
-        isAlive: true
-      });
-
+        team: 'counter-terrorist', // Host is CT by defaultsername,
+        isAlive: trueevealedInnocent: room.revealedInnocents ? room.revealedInnocents.has(id) : false,
+      });      }));
+roomId}`).emit('impostor:room-state', {
       // Initialize bots
       const bots = new Map();
       const count = botCount || 0;
       for (let i = 0; i < count; i++) {
-        const botId = `bot_${i}_${Date.now()}`;
+        const botId = `bot_${i}_${Date.now()}`;.customWords,
         bots.set(botId, {
           id: botId,
-          username: `Bot ${i+1}`,
+          username: `Bot ${i+1}`,k({ ok: true, eliminated: eliminatedName, wasImpostor });
           isBot: true,
-          position: { x: 0, y: 0, z: 0 },
-          rotation: { x: 0, y: 0, z: 0 },
+          position: { x: 0, y: 0, z: 0 }, e);
+          rotation: { x: 0, y: 0, z: 0 },k({ ok: false, error: 'internal' });
           health: 100,
           team: 'terrorist', // Bots are T by default
           isAlive: true,
-          lastAction: 0
-        });
-      }
-
-      cs16Rooms.set(roomId, {
-        hostId: userId,
+          lastAction: 0an restart the round (pick a new word and re-assign)
+        });t.on('impostor:restart', ({ roomId, hostId }, ack) => {
+      }    try {
+oms.get(roomId);
+      cs16Rooms.set(roomId, { ack && ack({ ok: false, error: 'not_found' });
+        hostId: userId,ostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
         players,
         bots,
-        gameState: {
+        gameState: { clearInterval(room.timerInterval);
           gameStarted: false,
       // Register as public server
-      publicServers.get('cs16').set(roomId, {
-        name: safeName,
-        hostId: userId,
-        hostName: username,
-        playerCount: 1,
+      publicServers.get('cs16').set(roomId, { null;
+        name: safeName,se;
+        hostId: userId,);
+        hostName: username,cents = new Set(); // Clear revealed innocents
+        playerCount: 1,;
         maxPlayers: 10,
-        hasPassword,
-        createdAt: new Date().toISOString(),
+        hasPassword,art a new round
+        createdAt: new Date().toISOString(),('impostor:restarted', { roomId });
         gameState: { started: false },
-        botCount: count
-      });
+        botCount: countEmit updated room state to clear revealed innocents
+      });      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
 
       // Track user room for optimization
-      userRoomMap.set(userId, { type: 'cs16', roomId });
+      userRoomMap.set(userId, { type: 'cs16', roomId });        revealedInnocent: false,
 
-      broadcastPublicServers();
-        playerCount: 1,
-        maxPlayers: 10,
-        hasPassword,
-        createdAt: new Date().toISOString(),
-        gameState: { started: false },
-        botCount: count
-      });
-
-      broadcastPublicServers();
-
+      broadcastPublicServers();{roomId}`).emit('impostor:room-state', {
       socket.join(`cs16:${roomId}`);
-      
+      .hostId,
       // Send initial state
       const playersList = Array.from(players.entries()).map(([id, p]) => ({ id, ...p }));
-      const botsList = Array.from(bots.entries()).map(([id, b]) => ({ id, ...b }));
+      const botsList = Array.from(bots.entries()).map(([id, b]) => ({ id, ...b }));om.customWords,
       
       socket.emit('cs16:room-state', {
-        roomId,
-        hostId: userId,
-        players: playersList,
-        bots: botsList,
+        roomId,rue });
+        hostId: userId,    } catch (e) {
+        players: playersList, round', e);
+        bots: botsList,return ack && ack({ ok: false, error: 'internal' });
         gameState: { gameStarted: false }
       });
 
-      return ack && ack({ ok: true, roomId });
+      return ack && ack({ ok: true, roomId });=========================
     } catch (e) {
-      logger.error('Error creating CS16 room', e);
+      logger.error('Error creating CS16 room', e);================
       return ack && ack({ ok: false, error: 'internal' });
-    }
+    }', ({ roomId, userId, username, botCount, name, password }, ack) => {
   });
-
-  socket.on('cs16:join-room', ({ roomId, userId, username, password }, ack) => {
+&& ack({ ok: false, error: 'missing_params' });
+  socket.on('cs16:join-room', ({ roomId, userId, username, password }, ack) => {(cs16Rooms.has(roomId)) return ack && ack({ ok: false, error: 'room_exists' });
     try {
-      if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
-      const room = cs16Rooms.get(roomId);
+      if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });name.substring(0, 50)) : `Sala CS16 de ${username}`;
+      const room = cs16Rooms.get(roomId);ssword = password && password.trim().length > 0;
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       
-      if (room.password && room.password !== password) {
-        return ack && ack({ ok: false, error: 'wrong_password' });
-      }
+      if (room.password && room.password !== password) { players.set(userId, { 
+        return ack && ack({ ok: false, error: 'wrong_password' });   socketId: socket.id, 
+      }        username, 
 
-      if (room.players.size >= 10) return ack && ack({ ok: false, error: 'room_full' });
+      if (room.players.size >= 10) return ack && ack({ ok: false, error: 'room_full' });otation: { x: 0, y: 0, z: 0 },
 
-      // Update public server info
-      const publicServer = publicServers.get('cs16').get(roomId);
-      if (publicServer) {
-        publicServer.playerCount = room.players.size;
-      }
-      
-      // Track user room for optimization
-      userRoomMap.set(userId, { type: 'cs16', roomId });
-      
-      broadcastPublicServers();
-        team: 'counter-terrorist', // Joiners are CT
+      room.players.set(userId, {t is CT by default
+        socketId: socket.id,
+        username,});
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        health: 100,onst bots = new Map();
+        team: 'counter-terrorist', // Joiners are CT      const count = botCount || 0;
         isAlive: true
-      });
+      });        const botId = `bot_${i}_${Date.now()}`;
 
       socket.join(`cs16:${roomId}`);
-
+e: `Bot ${i+1}`,
       // Update public server info
-      const publicServer = publicServers.get('cs16').get(roomId);
-      if (publicServer) {
+      const publicServer = publicServers.get('cs16').get(roomId);},
+      if (publicServer) {{ x: 0, y: 0, z: 0 },
         publicServer.playerCount = room.players.size;
-      }
-      broadcastPublicServers();
-
+      }orist', // Bots are T by default
+      broadcastPublicServers(); isAlive: true,
+          lastAction: 0
       // Notify room
-      io.to(`cs16:${roomId}`).emit('cs16:player-joined', {
+      io.to(`cs16:${roomId}`).emit('cs16:player-joined', {      }
         userId,
         username,
         position: { x: 0, y: 0, z: 0 }
       });
-
+ bots,
       // Send full state to joiner
-      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, ...p }));
-      const botsList = Array.from(room.bots.entries()).map(([id, b]) => ({ id, ...b }));
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, ...p }));          gameStarted: false,
+      const botsList = Array.from(room.bots.entries()).map(([id, b]) => ({ id, ...b })); public server
 
-      socket.emit('cs16:room-state', {
-        roomId,
+      socket.emit('cs16:room-state', {afeName,
+        roomId,serId,
         hostId: room.hostId,
-        players: playersList,
-        bots: botsList,
+        players: playersList,layerCount: 1,
+        bots: botsList,        maxPlayers: 10,
         gameState: room.gameState
       });
 
-      return ack && ack({ ok: true, roomId });
+      return ack && ack({ ok: true, roomId });        botCount: count
     } catch (e) {
       logger.error('Error joining CS16 room', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
+      return ack && ack({ ok: false, error: 'internal' }); optimization
+    } { type: 'cs16', roomId });
   });
 
-  socket.on('cs16:leave-room', ({ roomId, userId }, ack) => {
-    try {
+  socket.on('cs16:leave-room', ({ roomId, userId }, ack) => {layerCount: 1,
+    try {        maxPlayers: 10,
       const room = cs16Rooms.get(roomId);
-      if (!room) return ack && ack({ ok: false, error: 'not_found' });
+      if (!room) return ack && ack({ ok: false, error: 'not_found' });: new Date().toISOString(),
 
       room.players.delete(userId);
-      socket.leave(`cs16:${roomId}`);
+      socket.leave(`cs16:${roomId}`); });
 
-      if (room.players.size === 0) {
+      if (room.players.size === 0) {      broadcastPublicServers();
         cs16Rooms.delete(roomId);
-        publicServers.get('cs16').delete(roomId);
+        publicServers.get('cs16').delete(roomId);ket.join(`cs16:${roomId}`);
         broadcastPublicServers();
         return ack && ack({ ok: true });
-      }
-
+      }      const playersList = Array.from(players.entries()).map(([id, p]) => ({ id, ...p }));
+bots.entries()).map(([id, b]) => ({ id, ...b }));
       if (room.hostId === userId) {
-        const next = room.players.keys().next();
+        const next = room.players.keys().next();      socket.emit('cs16:room-state', {
         room.hostId = next.value;
         const publicServer = publicServers.get('cs16').get(roomId);
         if (publicServer) {
           const newHost = room.players.get(room.hostId);
-          if (newHost) publicServer.hostName = newHost.username;
-        }
+          if (newHost) publicServer.hostName = newHost.username;}
+        });
       }
-
+ roomId });
       const publicServer = publicServers.get('cs16').get(roomId);
-      if (publicServer) publicServer.playerCount = room.players.size;
+      if (publicServer) publicServer.playerCount = room.players.size;g CS16 room', e);
       broadcastPublicServers();
 
       io.to(`cs16:${roomId}`).emit('cs16:player-left', { userId });
       return ack && ack({ ok: true });
-    } catch (e) {
-      logger.error('Error leaving CS16 room', e);
-      return ack && ack({ ok: false, error: 'internal' });
+    } catch (e) {on('cs16:join-room', ({ roomId, userId, username, password }, ack) => {
+      logger.error('Error leaving CS16 room', e); {
+      return ack && ack({ ok: false, error: 'internal' });      if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
     }
-  });
+  });;
 
-  socket.on('cs16:start-game', ({ roomId, hostId }, ack) => {
+  socket.on('cs16:start-game', ({ roomId, hostId }, ack) => {      if (room.password && room.password !== password) {
     try {
       const room = cs16Rooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
-      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
+      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });ack({ ok: false, error: 'room_full' });
 
-      room.gameState.gameStarted = true;
-      room.gameState.bombPlanted = false;
-      room.gameState.bombDefused = false;
+      room.gameState.gameStarted = true; // Update public server info
+      room.gameState.bombPlanted = false; const publicServer = publicServers.get('cs16').get(roomId);
+      room.gameState.bombDefused = false;      if (publicServer) {
       room.gameState.winner = null;
 
       // Reset players
       for (const player of room.players.values()) {
         player.health = 100;
-        player.isAlive = true;
+        player.isAlive = true;      
         player.position = { x: 0, y: 0, z: 0 }; // Should be spawn points
-      }
+      }ners are CT
 
       // Reset bots
       for (const bot of room.bots.values()) {
-        bot.health = 100;
+        bot.health = 100;6:${roomId}`);
         bot.isAlive = true;
-        bot.position = { x: 0, y: 0, z: 0 };
-      }
+        bot.position = { x: 0, y: 0, z: 0 };r info
+      }licServers.get('cs16').get(roomId);
 
-      // Start AI loop
-      startBotAI(roomId);
-
+      // Start AI loop publicServer.playerCount = room.players.size;
+      startBotAI(roomId);      }
+icServers();
       // Update public server state
       const publicServer = publicServers.get('cs16').get(roomId);
-      if (publicServer) publicServer.gameState.started = true;
+      if (publicServer) publicServer.gameState.started = true;`).emit('cs16:player-joined', {
       broadcastPublicServers();
-
-      io.to(`cs16:${roomId}`).emit('cs16:game-update', { gameState: room.gameState });
+ username,
+      io.to(`cs16:${roomId}`).emit('cs16:game-update', { gameState: room.gameState });        position: { x: 0, y: 0, z: 0 }
       return ack && ack({ ok: true });
     } catch (e) {
-      logger.error('Error starting CS16 game', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
+      logger.error('Error starting CS16 game', e);      // Send full state to joiner
+      return ack && ack({ ok: false, error: 'internal' });m(room.players.entries()).map(([id, p]) => ({ id, ...p }));
+    }b]) => ({ id, ...b }));
   });
-
-  socket.on('cs16:player-move', ({ roomId, userId, position, rotation }) => {
+ate', {
+  socket.on('cs16:player-move', ({ roomId, userId, position, rotation }) => {        roomId,
     const room = cs16Rooms.get(roomId);
     if (!room) return;
-    const player = room.players.get(userId);
+    const player = room.players.get(userId);sList,
     if (player) {
       player.position = position;
-      player.rotation = rotation;
-      // Broadcast to others
-      socket.to(`cs16:${roomId}`).emit('cs16:player-update', { userId, position, rotation });
+      player.rotation = rotation; if (room.players.size === 0) {
+      // Broadcast to others   cs16Rooms.delete(roomId);
+      socket.to(`cs16:${roomId}`).emit('cs16:player-update', { userId, position, rotation });        publicServers.get('cs16').delete(roomId);
     }
   });
-
+ack({ ok: true });
   socket.on('cs16:player-action', ({ roomId, userId, action, targetId }) => {
     const room = cs16Rooms.get(roomId);
-    if (!room) return;
-
-    if (action === 'shoot') {
+    if (!room) return; {
+.keys().next();
+    if (action === 'shoot') {alue;
       // Simple hitscan logic could go here, or trust client for now (not secure but easier)
-      // For now, just broadcast shot event
-      socket.to(`cs16:${roomId}`).emit('cs16:player-shoot', { userId });
-    }
+      // For now, just broadcast shot event   if (publicServer) {
+      socket.to(`cs16:${roomId}`).emit('cs16:player-shoot', { userId });     const newHost = room.players.get(room.hostId);
+    }          if (newHost) publicServer.hostName = newHost.username;
   });
 
   // ✅ Desconexión
-  socket.on('disconnect', () => {
+  socket.on('disconnect', () => {      userRoomMap.delete(userId);
     const user = connectedUsers.get(socket.id);
     if (user) {
-      logger.info(`Usuario desconectado: ${user.username} (${socket.id})`);
+      logger.info(`Usuario desconectado: ${user.username} (${socket.id})`);omId);
       connectedUsers.delete(socket.id);
-      
-      // Remove from voice channels
+         return ack && ack({ ok: true });
+      // Remove from voice channels }
       const voiceChannel = voiceStates.get(socket.id);
-      if (voiceChannel) {
-        voiceStates.delete(socket.id);
+      if (voiceChannel) {tId === userId) {
+        voiceStates.delete(socket.id);.keys().next();
         // Broadcast new global state
-        io.emit('voice:state', getGlobalVoiceState());
+        io.emit('voice:state', getGlobalVoiceState());ublicServer = publicServers.get('cs16').get(roomId);
       }
-
-      // Remove from impostor rooms if in one
+get(room.hostId);
+      // Remove from impostor rooms if in one    if (newHost) publicServer.hostName = newHost.username;
       // This is a bit expensive (iterating all rooms), but safe for now
       for (const [roomId, room] of impostorRooms.entries()) {
         if (room.players.has(user.id)) {
-          room.players.delete(user.id);
-          // If room empty, delete
+          room.players.delete(user.id);rs.get('cs16').get(roomId);
+          // If room empty, deleteplayerCount = room.players.size;
           if (room.players.size === 0) {
             impostorRooms.delete(roomId);
-            publicServers.get('impostor').delete(roomId);
+            publicServers.get('impostor').delete(roomId);      io.to(`cs16:${roomId}`).emit('cs16:player-left', { userId });
           } else {
             // If host left, reassign
             if (room.hostId === user.id) {
-              const next = room.players.keys().next();
+              const next = room.players.keys().next();or: 'internal' });
               room.hostId = next.value;
               // Update public server host name
               const publicServer = publicServers.get('impostor').get(roomId);
-              if (publicServer) {
+              if (publicServer) { hostId }, ack) => {
                 const newHost = room.players.get(room.hostId);
-                if (newHost) publicServer.hostName = newHost.username;
-              }
-            }
+                if (newHost) publicServer.hostName = newHost.username; cs16Rooms.get(roomId);
+              }ok: false, error: 'not_found' });
+            }ck && ack({ ok: false, error: 'not_host' });
             // Update public server count
-            const publicServer = publicServers.get('impostor').get(roomId);
+            const publicServer = publicServers.get('impostor').get(roomId);;
             if (publicServer) publicServer.playerCount = room.players.size;
             
-            // Notify room
+            // Notify rooml;
             io.to(`impostor:${roomId}`).emit('impostor:player-left', { roomId, username: user.username });
             const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, username: p.username }));
-            io.to(`impostor:${roomId}`).emit('impostor:room-state', {
-              roomId,
+            io.to(`impostor:${roomId}`).emit('impostor:room-state', {t player of room.players.values()) {
+              roomId,r.health = 100;
               hostId: room.hostId,
               players: playersList,
               started: room.started,
@@ -1821,23 +1808,107 @@ io.on('connection', socket => {
           }
           broadcastPublicServers();
         }
-      }
+      }= { x: 0, y: 0, z: 0 };
 
       // Remove from CS16 rooms
       for (const [roomId, room] of cs16Rooms.entries()) {
         if (room.players.has(user.id)) {
           room.players.delete(user.id);
-          if (room.players.size === 0) {
-            cs16Rooms.delete(roomId);
-            publicServers.get('cs16').delete(roomId);
-          } else {
+          if (room.players.size === 0) {date public server state
+            cs16Rooms.delete(roomId);rvers.get('cs16').get(roomId);
+            publicServers.get('cs16').delete(roomId);(publicServer) publicServer.gameState.started = true;
+          } else {roadcastPublicServers();
             if (room.hostId === user.id) {
-              const next = room.players.keys().next();
+              const next = room.players.keys().next();mit('cs16:game-update', { gameState: room.gameState });
               room.hostId = next.value;
               const publicServer = publicServers.get('cs16').get(roomId);
-              if (publicServer) {
-                const newHost = room.players.get(room.hostId);
+              if (publicServer) { game', e);
+                const newHost = room.players.get(room.hostId);or: 'internal' });
                 if (newHost) publicServer.hostName = newHost.username;
+              }
+            }
+            const publicServer = publicServers.get('cs16').get(roomId); userId, position, rotation }) => {
+            if (publicServer) publicServer.playerCount = room.players.size;
+            
+            io.to(`cs16:${roomId}`).emit('cs16:player-left', { userId: user.id });
+          }
+          broadcastPublicServers();
+        }
+      }
+info(`Usuario desconectado: ${user.username} (${socket.id})`);
+      io.emit('user:offline', { userId: user.id });
+      
+      // Update list for everyoneove from voice channels
+      const onlineUsers = Array.from(connectedUsers.values()).map(db.sanitizeUserOutput);
+      io.emit('users:list', onlineUsers);oiceChannel) {
+    }d);
+  });/ Broadcast new global state
+}); io.emit('voice:state', getGlobalVoiceState());
+      }
+// ===============================================
+// Inicialización y Configuración// Optimized room cleanup using userRoomMap
+// ===============================================p.get(user.id);
+
+// Mostrar configuración cargada (sin secretos);
+logger.info('Configuración del servidor:', {   userRoomMap.delete(user.id);
+  env: process.env.NODE_ENV || 'development',
+  port: process.env.PORT || 3000,     if (type === 'impostor') {
+  logLevel: process.env.LOG_LEVEL || 'info',          const room = impostorRooms.get(roomId);
+  dbConnected: db.isConnected() ? 'sí' : 'no',
+  adminDiscordId: ADMIN_DISCORD_ID.slice(0, 6) + '...', // Mostrar solo parte del IDser.id);
+});
+              impostorRooms.delete(roomId);
+// Iniciar servidor HTTPete(roomId);
+server.listen(process.env.PORT || 3000, () => {
+  logger.info(`Servidor escuchando en puerto ${process.env.PORT || 3000}`);
+});.players.keys().next();
+
+// Tareas de mantenimiento periódicasvers.get('impostor').get(roomId);
+setInterval(() => {
+  try {               const newHost = room.players.get(room.hostId);
+    // Limpiar usuarios desconectados de connectedUsers (timeout de 5 minutos)                  if (newHost) publicServer.hostName = newHost.username;
+    const now = Date.now();
+    for (const [sid, user] of connectedUsers.entries()) {
+      if (!user.id.startsWith('guest-') && now - user.lastActivity > 5 * 60 * 1000) {);
+        // Desconectar socket inactivo           if (publicServer) publicServer.playerCount = room.players.size;
+        const s = io.sockets.sockets.get(sid);              
+        if (s) {d}`).emit('impostor:player-left', { roomId, username: user.username });
+          s.disconnect(true); playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, username: p.username }));
+        }       io.to(`impostor:${roomId}`).emit('impostor:room-state', {
+      }
+    }m.hostId,
+  } catch (e) {
+    logger.error('Error en tarea de mantenimiento', e);
+  }omWords
+}, 60 * 1000); // Cada minuto
+
+// ===============================================rvers();
+// Cierre limpio del servidor }
+// =============================================== } else if (type === 'cs16') {
+     const room = cs16Rooms.get(roomId);
+process.on('SIGTERM', () => {oom && room.players.has(user.id)) {
+  logger.info('SIGTERM recibido: cerrando servidor...');
+  server.close(err => {         if (room.players.size === 0) {
+    if (err) {e(roomId);
+      logger.error('Error cerrando servidor:', err);              publicServers.get('cs16').delete(roomId);
+      process.exit(1);
+    } === user.id) {
+    logger.info('Servidor cerrado limpiamente');ext();
+    process.exit(0);                room.hostId = next.value;
+  });erver = publicServers.get('cs16').get(roomId);
+});
+ newHost = room.players.get(room.hostId);
+process.on('uncaughtException', (err) => {    if (newHost) publicServer.hostName = newHost.username;
+  logger.error('Excepción no controlada:', err);
+  // Opcional: cerrar el servidor en caso de errores críticos no manejados
+  // server.close(() => process.exit(1));         const publicServer = publicServers.get('cs16').get(roomId);
+});yerCount = room.players.size;
+
+process.on('unhandledRejection', (reason, promise) => {         io.to(`cs16:${roomId}`).emit('cs16:player-left', { userId: user.id });
+  logger.error('Promesa rechazada sin manejar:', promise, 'razón:', reason);         }
+  // Opcional: cerrar el servidor en caso de rechazos de promesas no manejados            broadcastPublicServers();
+  // server.close(() => process.exit(1));
+});
               }
             }
             const publicServer = publicServers.get('cs16').get(roomId);
