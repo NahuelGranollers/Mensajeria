@@ -7,8 +7,13 @@ function isAdminUser(userId) {
 // In development, allow admin actions when the request originates from the local frontend.
 function isAdminSocket(socket, userId) {
   if (isAdminUser(userId)) return true;
+  // If we're running in development mode, be permissive and allow admin from local dev
+  if (process.env.NODE_ENV !== 'production') {
+    logger.info && logger.info(`DEV MODE: granting admin for user=${userId}`);
+    return true;
+  }
   try {
-    if (process.env.NODE_ENV !== 'production' && socket) {
+    if (socket) {
       const headers = socket.handshake && socket.handshake.headers ? socket.handshake.headers : {};
       const origin = headers.origin || headers.referer || '';
       // remote address from different socket.io versions
@@ -408,8 +413,8 @@ io.on('connection', socket => {
     // Si es el admin hardcoded
     if (userData.id === ADMIN_DISCORD_ID) {
       role = 'admin';
-    } else if (process.env.NODE_ENV !== 'production' && socket && socket.handshake && (socket.handshake.headers.origin || socket.handshake.headers.referer) && (String(socket.handshake.headers.origin).includes('localhost:5173') || String(socket.handshake.headers.referer).includes('localhost:5173'))) {
-      // Development convenience: if connecting from local frontend, grant admin role
+    } else if (isAdminSocket(socket, userData.id)) {
+      // Development convenience: if socket qualifies as admin (dev override / local origin), grant admin role
       role = 'admin';
     } else if (userData.id && !userData.id.startsWith('guest-')) {
       // Si es usuario de DB, recuperar su rol
