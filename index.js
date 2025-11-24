@@ -94,6 +94,10 @@ connectedUsers.set('bot', BOT_USER);
 // Estado de usuarios 'trolleados' por admin: userId -> mode (e.g., 'uwu', 'meow', 'kawaii')
 const trolledUsers = new Map();
 
+// Optimization: Reverse lookup for faster disconnect handling
+// userId -> { type: 'cs16' | 'impostor', roomId: string }
+const userRoomMap = new Map();
+
 // Estado de canales de voz: userId -> channelId
 const voiceStates = new Map();
 
@@ -1000,17 +1004,6 @@ io.on('connection', socket => {
     }
   });
 
-  socket.on('voice:chunk', ({ buffer, sampleRate }) => {
-    const channelId = voiceStates.get(socket.id);
-    if (!channelId) return;
-    
-    const userId = connectedUsers.get(socket.id)?.id;
-    if (!userId) return;
-
-    // Relay to others in channel (excluding sender)
-    socket.to(`voice:${channelId}`).emit('voice:chunk', { fromUserId: userId, buffer, sampleRate });
-  });
-
   // ==========================
   // Impostor Game Handlers
   // ==========================
@@ -1048,20 +1041,23 @@ io.on('connection', socket => {
         createdAt: new Date().toISOString(),
         gameState: { started: false }
       });
+      // Register as public server
+      publicServers.get('impostor').set(roomId, {
+        name: safeName,
+        hostId: userId,
+        hostName: username,
+        playerCount: 1,
+        maxPlayers: 10,
+        hasPassword,
+        createdAt: new Date().toISOString(),
+        gameState: { started: false }
+      });
+
+      // Track user room for optimization
+      userRoomMap.set(userId, { type: 'impostor', roomId });
 
       // Broadcast updated server list so all clients see the new room
       broadcastPublicServers();
-
-      socket.join(`impostor:${roomId}`);
-      socket.emit('impostor:room-state', {
-        roomId,
-        hostId: userId,
-        players: Array.from(players.entries()).map(([id, p]) => ({ id, username: p.username })),
-        started: false,
-        customWords: [],
-        name: safeName,
-        hasPassword
-      });
       return ack && ack({ ok: true, roomId });
     } catch (e) {
       logger.error('Error creating impostor room', e);
@@ -1082,14 +1078,17 @@ io.on('connection', socket => {
         return ack && ack({ ok: false, error: 'wrong_password' });
       }
 
-      room.players.set(userId, { socketId: socket.id, username });
-      socket.join(`impostor:${roomId}`);
-
       // Update public server info
       const publicServer = publicServers.get('impostor').get(roomId);
       if (publicServer) {
         publicServer.playerCount = room.players.size;
       }
+
+      // Track user room for optimization
+      userRoomMap.set(userId, { type: 'impostor', roomId });
+
+      // Broadcast updated server list so everyone sees the new player count
+      broadcastPublicServers();
 
       // Broadcast updated server list so everyone sees the new player count
       broadcastPublicServers();
@@ -1117,21 +1116,24 @@ io.on('connection', socket => {
 
   // Leave a room
   socket.on('impostor:leave-room', ({ roomId, userId }, ack) => {
-    try {
-      const room = impostorRooms.get(roomId);
-      if (!room) return ack && ack({ ok: false, error: 'not_found' });
-      const leavingPlayer = room.players.get(userId);
-      room.players.delete(userId);
-      socket.leave(`impostor:${roomId}`);
       // If room is now empty, delete it
       if (room.players.size === 0) {
         impostorRooms.delete(roomId);
         publicServers.get('impostor').delete(roomId);
         // Broadcast removal
         broadcastPublicServers();
+        userRoomMap.delete(userId);
         return ack && ack({ ok: true });
       }
       // If host left, pick a new host
+      if (room.hostId === userId) {
+        const next = room.players.keys().next();
+        room.hostId = next.value;
+      }
+
+      userRoomMap.delete(userId);
+
+      // Update public server infohost
       if (room.hostId === userId) {
         const next = room.players.keys().next();
         room.hostId = next.value;

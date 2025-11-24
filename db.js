@@ -71,6 +71,19 @@ async function createTables() {
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_system BOOLEAN DEFAULT 0
     );`,
+
+    // Tabla de Noticias
+    `CREATE TABLE IF NOT EXISTS news (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      excerpt TEXT,
+      author_id TEXT NOT NULL,
+      author_name TEXT NOT NULL,
+      image_url TEXT,
+      category TEXT DEFAULT 'announcement',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );`,
   ];
 
   try {
@@ -82,6 +95,8 @@ async function createTables() {
         const cols = db.prepare("PRAGMA table_info('users')").all();
         const hasColor = cols.some(c => c.name === 'color');
         const hasScore = cols.some(c => c.name === 'score');
+        const hasVerified = cols.some(c => c.name === 'verified');
+        
         if (!hasColor) {
           db.exec("ALTER TABLE users ADD COLUMN color TEXT DEFAULT '#5865F2'");
           console.log('✅ [DB] Columna color añadida a users (migración)');
@@ -90,36 +105,35 @@ async function createTables() {
           db.exec('ALTER TABLE users ADD COLUMN score INTEGER DEFAULT 0');
           console.log('✅ [DB] Columna score añadida a users (migración)');
         }
+        if (!hasVerified) {
+          db.exec('ALTER TABLE users ADD COLUMN verified BOOLEAN DEFAULT 0');
+          console.log('✅ [DB] Columna verified añadida a users (migración)');
+        }
       } catch (merr) {
-        console.warn('No se pudo verificar/añadir columna color:', merr);
+        console.warn('No se pudo verificar/añadir columnas:', merr);
       }
     } else {
       const client = await db.connect();
       try {
         for (const query of queries) {
-          // Ajustes para Postgres (BOOLEAN 0/1 -> TRUE/FALSE es automático en muchos casos pero mejor ser explícito si falla, por ahora estándar SQL)
-          // Postgres usa TRUE/FALSE para boolean, SQLite 0/1.
-          // Ajustamos la query de mensajes para Postgres si es necesario, pero el driver suele manejarlo.
-          // Sin embargo, 'DEFAULT 0' para boolean en Postgres puede fallar si la columna es BOOLEAN estricto.
-          // Vamos a normalizar la query de mensajes para Postgres.
+          // Ajustes para Postgres
           let pgQuery = query;
           if (query.includes('is_system BOOLEAN DEFAULT 0')) {
-            pgQuery = query.replace(
-              'is_system BOOLEAN DEFAULT 0',
-              'is_system BOOLEAN DEFAULT FALSE'
-            );
+            pgQuery = query.replace('is_system BOOLEAN DEFAULT 0', 'is_system BOOLEAN DEFAULT FALSE');
+          }
+          if (query.includes('verified BOOLEAN DEFAULT 0')) {
+            pgQuery = query.replace('verified BOOLEAN DEFAULT 0', 'verified BOOLEAN DEFAULT FALSE');
           }
           await client.query(pgQuery);
         }
         console.log('✅ [DB] Tablas PostgreSQL verificadas/creadas.');
-        // Ensure color column exists in Postgres
+        // Ensure columns exist in Postgres
         try {
-          await client.query(
-            `ALTER TABLE users ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#5865F2'`
-          );
+          await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#5865F2'`);
           await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 0`);
+          await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE`);
         } catch (merr) {
-          console.warn('No se pudo verificar/añadir columna color en Postgres:', merr);
+          console.warn('No se pudo verificar/añadir columnas en Postgres:', merr);
         }
       } finally {
         client.release();
@@ -136,11 +150,13 @@ async function createTables() {
 async function saveUser(user) {
   const { id, username, avatar, role, status, color } = user;
   const score = user.score || 0;
+  const verified = user.verified ? 1 : 0; // SQLite
+  const verifiedPg = !!user.verified; // Postgres
 
   if (type === 'sqlite') {
     const stmt = db.prepare(`
-      INSERT INTO users (id, username, avatar, color, score, role, status, last_seen)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO users (id, username, avatar, color, score, role, status, verified, last_seen)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(id) DO UPDATE SET
       username = excluded.username,
       avatar = excluded.avatar,
@@ -148,13 +164,14 @@ async function saveUser(user) {
       score = excluded.score,
       role = excluded.role,
       status = excluded.status,
+      verified = excluded.verified,
       last_seen = datetime('now')
     `);
-    stmt.run(id, username, avatar, color || '#5865F2', score, role, status);
+    stmt.run(id, username, avatar, color || '#5865F2', score, role, status, verified);
   } else {
     const query = `
-      INSERT INTO users (id, username, avatar, color, score, role, status, last_seen)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      INSERT INTO users (id, username, avatar, color, score, role, status, verified, last_seen)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       ON CONFLICT(id) DO UPDATE SET
       username = EXCLUDED.username,
       avatar = EXCLUDED.avatar,
@@ -162,19 +179,52 @@ async function saveUser(user) {
       score = EXCLUDED.score,
       role = EXCLUDED.role,
       status = EXCLUDED.status,
+      verified = EXCLUDED.verified,
       last_seen = NOW()
     `;
-    await db.query(query, [id, username, avatar, color || '#5865F2', score, role, status]);
+    await db.query(query, [id, username, avatar, color || '#5865F2', score, role, status, verifiedPg]);
   }
 }
 
 // Obtener usuario
 async function getUser(id) {
   if (type === 'sqlite') {
-    return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (user) user.verified = !!user.verified;
+    return user;
   } else {
     const res = await db.query('SELECT * FROM users WHERE id = $1', [id]);
     return res.rows[0];
+  }
+}
+
+// Guardar noticia
+async function saveNews(news) {
+  const { id, title, content, excerpt, authorId, authorName, imageUrl, category } = news;
+  
+  if (type === 'sqlite') {
+    const stmt = db.prepare(`
+      INSERT INTO news (id, title, content, excerpt, author_id, author_name, image_url, category, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `);
+    stmt.run(id, title, content, excerpt, authorId, authorName, imageUrl, category);
+  } else {
+    const query = `
+      INSERT INTO news (id, title, content, excerpt, author_id, author_name, image_url, category, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    `;
+    await db.query(query, [id, title, content, excerpt, authorId, authorName, imageUrl, category]);
+  }
+}
+
+// Obtener noticias
+async function getNews(limit = 20) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 50));
+  if (type === 'sqlite') {
+    return db.prepare('SELECT * FROM news ORDER BY created_at DESC LIMIT ?').all(safeLimit);
+  } else {
+    const res = await db.query('SELECT * FROM news ORDER BY created_at DESC LIMIT $1', [safeLimit]);
+    return res.rows;
   }
 }
 
@@ -245,6 +295,8 @@ module.exports = {
   saveMessage,
   getChannelHistory,
   deleteMessage,
+  saveNews,
+  getNews,
   isConnected: function() {
     if (!db) return false;
     if (type === 'sqlite') {
@@ -254,9 +306,7 @@ module.exports = {
   },
   // Protección de datos: eliminar datos sensibles antes de enviar al frontend
   sanitizeUserOutput: function (user) {
-    if (!user) return null;
-    // Nunca exponer datos internos, solo los necesarios
-    const { id, username, avatar, role, status, last_seen, color, score } = user;
+    const { id, username, avatar, role, status, last_seen, color, score, verified } = user;
     return {
       id,
       username,
@@ -265,6 +315,9 @@ module.exports = {
       status,
       color: color || '#5865F2',
       score: score || 0,
+      verified: !!verified,
+      lastSeen: last_seen,
+    };score: score || 0,
       lastSeen: last_seen,
     };
   },
