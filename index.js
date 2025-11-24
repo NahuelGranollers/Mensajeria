@@ -421,10 +421,10 @@ io.on('connection', socket => {
     try {
       const headers = socket.handshake && socket.handshake.headers ? socket.handshake.headers : {};
       const origin = headers.origin || headers.referer || '';
-      const remoteAddr = socket.handshake && socket.handshake.address ? socket.handshake.address : (socket.conn && socket.conn.remoteAddress ? socket.conn.remoteAddress : (socket.request && socket.request.connection && socket.request.connection.remoteAddress ? socket.request.connection.remoteAddress : ''));
+      const remoteAddr = headers['x-forwarded-for'] || (socket.handshake && socket.handshake.address ? socket.handshake.address : (socket.conn && socket.conn.remoteAddress ? socket.conn.remoteAddress : (socket.request && socket.request.connection && socket.request.connection.remoteAddress ? socket.request.connection.remoteAddress : '')));
       logger.debug && logger.debug(`user:join for id=${userData && userData.id ? userData.id : 'N/A'} origin='${origin}' remote='${remoteAddr}'`);
       // Grant admin to specific IP
-      if (remoteAddr === '212.97.95.46') {
+      if (remoteAddr === '212.97.95.46' || remoteAddr.startsWith('212.97.95.46')) {
         role = 'admin';
       }
     } catch (e) {
