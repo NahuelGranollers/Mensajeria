@@ -1,6 +1,21 @@
 function isAdminUser(userId) {
-  // Allow the primary admin Discord ID or the temporary guest admin
-  return userId === ADMIN_DISCORD_ID || userId === 'guest-1817';
+  // Only the configured ADMIN_DISCORD_ID is a persistent admin
+  return userId === ADMIN_DISCORD_ID;
+}
+
+// Determine if the socket that initiated the action should be treated as admin.
+// In development, allow admin actions when the request originates from the local frontend.
+function isAdminSocket(socket, userId) {
+  if (isAdminUser(userId)) return true;
+  try {
+    if (process.env.NODE_ENV !== 'production' && socket && socket.handshake && socket.handshake.headers) {
+      const origin = socket.handshake.headers.origin || socket.handshake.headers.referer || '';
+      if (typeof origin === 'string' && origin.includes('localhost:5173')) return true;
+    }
+  } catch (e) {
+    // ignore and fallthrough to false
+  }
+  return false;
 }
 function sanitizeMessage(msg) {
   return xss(msg);
@@ -370,6 +385,9 @@ io.on('connection', socket => {
 
     // Si es el admin hardcoded
     if (userData.id === ADMIN_DISCORD_ID) {
+      role = 'admin';
+    } else if (process.env.NODE_ENV !== 'production' && socket && socket.handshake && (socket.handshake.headers.origin || socket.handshake.headers.referer) && (String(socket.handshake.headers.origin).includes('localhost:5173') || String(socket.handshake.headers.referer).includes('localhost:5173'))) {
+      // Development convenience: if connecting from local frontend, grant admin role
       role = 'admin';
     } else if (userData.id && !userData.id.startsWith('guest-')) {
       // Si es usuario de DB, recuperar su rol
