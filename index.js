@@ -442,7 +442,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Limpiar canal
   socket.on('admin:clear-channel', async data => {
     const { channelId, adminId } = data;
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de limpiar canal por usuario no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
@@ -459,7 +459,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Limpiar todos los mensajes de todos los canales
   socket.on('admin:clear-all-messages', async data => {
     const { adminId } = data;
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de limpiar todos los mensajes por usuario no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
@@ -481,7 +481,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Reiniciar usuarios (desconectar y borrar usuarios de la DB)
   socket.on('admin:clear-users', async data => {
     const { adminId } = data || {};
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(`Intento de clear-users por no admin: ${adminId ? adminId.slice(0,6)+'...' : 'N/A'}`);
       return;
     }
@@ -524,7 +524,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Banear usuario
   socket.on('admin:ban-user', async data => {
     const { userId, username, adminId } = data;
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de banear usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
@@ -548,7 +548,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Expulsar usuario
   socket.on('admin:kick-user', async data => {
     const { userId, username, adminId } = data;
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de expulsar usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
@@ -571,7 +571,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Eliminar mensaje
   socket.on('admin:delete-message', async data => {
     const { messageId, channelId, adminId } = data;
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de eliminar mensaje por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
@@ -593,7 +593,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Silenciar usuario
   socket.on('admin:silence-user', async data => {
     const { userId, adminId } = data;
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de silenciar usuario por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
@@ -608,7 +608,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Cambiar color de usuario
   socket.on('admin:change-color', async data => {
     const { userId, color, adminId } = data;
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de cambiar color por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
@@ -956,7 +956,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Mensaje global
   socket.on('admin:global-message', async data => {
     const { content, adminId, sendAsBot, channelId } = data;
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de mensaje global por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
@@ -995,7 +995,7 @@ io.on('connection', socket => {
   // 🔒 Admin: Modo troll
   socket.on('admin:troll-mode', async data => {
     const { userId, mode, adminId } = data; // mode can be 'uwu', 'meow', 'kawaii', or null to clear
-    if (!isAdminUser(adminId)) {
+    if (!isAdminSocket(socket, adminId)) {
       logger.warn(
         `Intento de modo troll por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
       );
