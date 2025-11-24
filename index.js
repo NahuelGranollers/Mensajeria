@@ -100,8 +100,141 @@ const voiceStates = new Map();
 // Impostor game rooms: roomId -> { hostId, players: Map(userId -> { socketId, username }), started, word, impostorId }
 const impostorRooms = new Map();
 
-// CS16 game rooms: roomId -> { hostId, players: Map(userId -> { socketId, username, position, rotation, health, team }), gameState }
+// CS16 game rooms: roomId -> { hostId, players: Map(userId -> { socketId, username, position, rotation, health, team }), gameState, bots: Map(botId -> botData) }
 const cs16Rooms = new Map();
+
+// Public server list: gameType -> Map(roomId -> { name, hostId, hostName, playerCount, maxPlayers, hasPassword, createdAt, gameState })
+const publicServers = new Map([
+  ['impostor', new Map()],
+  ['cs16', new Map()]
+]);
+
+// Bot AI function
+function startBotAI(roomId) {
+  const aiInterval = setInterval(() => {
+    const room = cs16Rooms.get(roomId);
+    if (!room || !room.gameState.gameStarted) {
+      clearInterval(aiInterval);
+      return;
+    }
+
+    // Process each bot
+    for (const [botId, bot] of room.bots.entries()) {
+      if (!bot.isAlive) continue;
+
+      const now = Date.now();
+      if (now - bot.lastAction < 1000) continue; // Act every second
+
+      bot.lastAction = now;
+
+      // Simple AI logic
+      updateBotAI(room, botId, bot);
+    }
+  }, 500); // Check every 500ms
+}
+
+function updateBotAI(room, botId, bot) {
+  // Find nearest enemy
+  let nearestEnemy = null;
+  let nearestDistance = Infinity;
+
+  const allPlayers = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
+
+  for (const [id, player] of allPlayers) {
+    if (id === botId || !player.isAlive || player.team === bot.team) continue;
+
+    const distance = Math.sqrt(
+      Math.pow(player.position.x - bot.position.x, 2) +
+      Math.pow(player.position.z - bot.position.z, 2)
+    );
+
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestEnemy = { id, ...player };
+    }
+  }
+
+  if (nearestEnemy && nearestDistance < 15) { // Within shooting range
+    // Move towards enemy
+    const dx = nearestEnemy.position.x - bot.position.x;
+    const dz = nearestEnemy.position.z - bot.position.z;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+
+    if (distance > 2) { // Don't get too close
+      bot.position.x += (dx / distance) * 0.5;
+      bot.position.z += (dz / distance) * 0.5;
+    }
+
+    // Face enemy
+    bot.rotation.y = Math.atan2(dx, dz);
+
+    // Shoot at enemy (30% chance per action)
+    if (Math.random() < 0.3) {
+      // Simulate shooting
+      if (nearestEnemy.isBot) {
+        // Bot vs Bot combat
+        const targetBot = room.bots.get(nearestEnemy.id);
+        if (targetBot) {
+          targetBot.health = Math.max(0, targetBot.health - 25);
+          if (targetBot.health <= 0) {
+            targetBot.isAlive = false;
+          }
+
+          io.to(`cs16:${roomId}`).emit('cs16:player-hit', {
+            shooterId: botId,
+            targetId: nearestEnemy.id,
+            damage: 25,
+            killed: targetBot.health <= 0
+          });
+        }
+      } else {
+        // Bot vs Player combat
+        const targetPlayer = room.players.get(nearestEnemy.id);
+        if (targetPlayer) {
+          targetPlayer.health = Math.max(0, targetPlayer.health - 25);
+          if (targetPlayer.health <= 0) {
+            targetPlayer.isAlive = false;
+          }
+
+          io.to(`cs16:${roomId}`).emit('cs16:player-hit', {
+            shooterId: botId,
+            targetId: nearestEnemy.id,
+            damage: 25,
+            killed: targetPlayer.health <= 0
+          });
+        }
+      }
+    }
+  } else {
+    // Random movement when no enemy nearby
+    if (Math.random() < 0.2) {
+      bot.position.x += (Math.random() - 0.5) * 2;
+      bot.position.z += (Math.random() - 0.5) * 2;
+
+      // Keep bots within bounds
+      bot.position.x = Math.max(-15, Math.min(15, bot.position.x));
+      bot.position.z = Math.max(-15, Math.min(15, bot.position.z));
+    }
+  }
+
+  // Bot actions (plant bomb if terrorist, defuse if counter-terrorist)
+  if (bot.team === 'terrorist' && !room.gameState.bombPlanted && Math.random() < 0.05) {
+    room.gameState.bombPlanted = true;
+    io.to(`cs16:${roomId}`).emit('cs16:bomb-planted', { planterId: botId });
+  } else if (bot.team === 'counter-terrorist' && room.gameState.bombPlanted && Math.random() < 0.05) {
+    room.gameState.bombDefused = true;
+    room.gameState.winner = 'counter-terrorists';
+    room.gameState.gameStarted = false;
+    io.to(`cs16:${roomId}`).emit('cs16:bomb-defused', { defuserId: botId });
+  }
+
+  // Broadcast bot position updates
+  io.to(`cs16:${roomId}`).emit('cs16:player-update', {
+    userId: botId,
+    position: bot.position,
+    rotation: bot.rotation
+  });
+}
 
 // Small default word list for rounds (can be extended or loaded from DB)
 const IMPOSTOR_WORDS = [
@@ -491,6 +624,31 @@ app.post('/auth/logout', (req, res) => {
   });
 });
 
+// Get public server list
+app.get('/api/servers', (req, res) => {
+  try {
+    const servers = {};
+    for (const [gameType, gameServers] of publicServers.entries()) {
+      servers[gameType] = Array.from(gameServers.values()).map(server => ({
+        roomId: server.roomId || Object.keys(gameServers).find(key => gameServers.get(key) === server),
+        name: server.name,
+        hostId: server.hostId,
+        hostName: server.hostName,
+        playerCount: server.playerCount,
+        maxPlayers: server.maxPlayers,
+        hasPassword: server.hasPassword,
+        createdAt: server.createdAt,
+        gameState: server.gameState,
+        botCount: server.botCount || 0
+      }));
+    }
+    res.json({ servers });
+  } catch (e) {
+    logger.error('Error getting server list', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ===============================================
 // 🔌 Socket.IO Logic
 // ===============================================
@@ -801,10 +959,13 @@ io.on('connection', socket => {
   // Impostor Game Handlers
   // ==========================
   // Create a room and become host
-  socket.on('impostor:create-room', ({ roomId, userId, username }, ack) => {
+  socket.on('impostor:create-room', ({ roomId, userId, username, name, password }, ack) => {
     try {
       if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
       if (impostorRooms.has(roomId)) return ack && ack({ ok: false, error: 'room_exists' });
+
+      const safeName = name ? sanitizeMessage(name.substring(0, 50)) : `Sala de ${username}`;
+      const hasPassword = password && password.trim().length > 0;
 
       const players = new Map();
       players.set(userId, { socketId: socket.id, username });
@@ -815,6 +976,21 @@ io.on('connection', socket => {
         word: null,
         impostorId: null,
         customWords: [],
+        name: safeName,
+        password: hasPassword ? password.trim() : null,
+        createdAt: new Date().toISOString()
+      });
+
+      // Register as public server
+      publicServers.get('impostor').set(roomId, {
+        name: safeName,
+        hostId: userId,
+        hostName: username,
+        playerCount: 1,
+        maxPlayers: 10,
+        hasPassword,
+        createdAt: new Date().toISOString(),
+        gameState: { started: false }
       });
 
       socket.join(`impostor:${roomId}`);
@@ -824,6 +1000,8 @@ io.on('connection', socket => {
         players: Array.from(players.entries()).map(([id, p]) => ({ id, username: p.username })),
         started: false,
         customWords: [],
+        name: safeName,
+        hasPassword
       });
       return ack && ack({ ok: true, roomId });
     } catch (e) {
@@ -833,15 +1011,26 @@ io.on('connection', socket => {
   });
 
   // Join an existing room
-  socket.on('impostor:join-room', ({ roomId, userId, username }, ack) => {
+  socket.on('impostor:join-room', ({ roomId, userId, username, password }, ack) => {
     try {
       if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
       const room = impostorRooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       if (room.started) return ack && ack({ ok: false, error: 'already_started' });
 
+      // Check password if room has one
+      if (room.password && room.password !== password) {
+        return ack && ack({ ok: false, error: 'wrong_password' });
+      }
+
       room.players.set(userId, { socketId: socket.id, username });
       socket.join(`impostor:${roomId}`);
+
+      // Update public server info
+      const publicServer = publicServers.get('impostor').get(roomId);
+      if (publicServer) {
+        publicServer.playerCount = room.players.size;
+      }
 
       // Notify all in room of updated players
       const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
@@ -854,6 +1043,8 @@ io.on('connection', socket => {
         players: playersList,
         started: room.started,
         customWords: room.customWords,
+        name: room.name,
+        hasPassword: !!room.password
       });
       return ack && ack({ ok: true, roomId });
     } catch (e) {
@@ -873,6 +1064,7 @@ io.on('connection', socket => {
       // If room is now empty, delete it
       if (room.players.size === 0) {
         impostorRooms.delete(roomId);
+        publicServers.get('impostor').delete(roomId);
         return ack && ack({ ok: true });
       }
       // If host left, pick a new host
@@ -880,6 +1072,19 @@ io.on('connection', socket => {
         const next = room.players.keys().next();
         room.hostId = next.value;
       }
+
+      // Update public server info
+      const publicServer = publicServers.get('impostor').get(roomId);
+      if (publicServer) {
+        publicServer.playerCount = room.players.size;
+        publicServer.hostId = room.hostId;
+        // Update host name
+        const newHost = room.players.get(room.hostId);
+        if (newHost) {
+          publicServer.hostName = newHost.username;
+        }
+      }
+
       // Emit player left message
       if (leavingPlayer) {
         io.to(`impostor:${roomId}`).emit('impostor:player-left', {
@@ -898,6 +1103,8 @@ io.on('connection', socket => {
         players: playersList,
         started: room.started,
         customWords: room.customWords,
+        name: room.name,
+        hasPassword: !!room.password
       });
       return ack && ack({ ok: true });
     } catch (e) {
@@ -1198,10 +1405,13 @@ io.on('connection', socket => {
   // CS16 Game Handlers
   // ==========================
   // Create a CS16 room and become host
-  socket.on('cs16:create-room', ({ roomId, userId, username }, ack) => {
+  socket.on('cs16:create-room', ({ roomId, userId, username, botCount = 0, name, password }, ack) => {
     try {
       if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
       if (cs16Rooms.has(roomId)) return ack && ack({ ok: false, error: 'room_exists' });
+
+      const safeName = name ? sanitizeMessage(name.substring(0, 50)) : `Sala CS16 de ${username}`;
+      const hasPassword = password && password.trim().length > 0;
 
       const players = new Map();
       players.set(userId, {
@@ -1211,35 +1421,79 @@ io.on('connection', socket => {
         rotation: { x: 0, y: 0, z: 0 },
         health: 100,
         isAlive: true,
-        team: 'counter-terrorist'
+        team: 'counter-terrorist',
+        isBot: false
       });
+
+      // Create bots if requested
+      const bots = new Map();
+      for (let i = 0; i < botCount; i++) {
+        const botId = `bot_${roomId}_${i}`;
+        const botTeam = i % 2 === 0 ? 'counter-terrorist' : 'terrorist'; // Alternate teams
+        bots.set(botId, {
+          id: botId,
+          username: `Bot ${i + 1}`,
+          position: { x: Math.random() * 20 - 10, y: 0, z: Math.random() * 20 - 10 },
+          rotation: { x: 0, y: 0, z: 0 },
+          health: 100,
+          isAlive: true,
+          team: botTeam,
+          isBot: true,
+          lastAction: Date.now(),
+          target: null
+        });
+      }
 
       cs16Rooms.set(roomId, {
         hostId: userId,
         players,
+        bots,
         gameState: {
           gameStarted: false,
           roundTime: 0,
           bombPlanted: false,
           bombDefused: false,
           winner: null
-        }
+        },
+        name: safeName,
+        password: hasPassword ? password.trim() : null,
+        createdAt: new Date().toISOString()
+      });
+
+      // Register as public server
+      publicServers.get('cs16').set(roomId, {
+        name: safeName,
+        hostId: userId,
+        hostName: username,
+        playerCount: 1,
+        maxPlayers: 10,
+        hasPassword,
+        createdAt: new Date().toISOString(),
+        gameState: { gameStarted: false, roundTime: 0 },
+        botCount
       });
 
       socket.join(`cs16:${roomId}`);
+
+      // Combine players and bots for room state
+      const allParticipants = [...Array.from(players.entries()), ...Array.from(bots.entries())];
+
       socket.emit('cs16:room-state', {
         roomId,
         hostId: userId,
-        players: Array.from(players.entries()).map(([id, p]) => ({
+        players: allParticipants.map(([id, p]) => ({
           id,
           username: p.username,
           position: p.position,
           rotation: p.rotation,
           health: p.health,
           isAlive: p.isAlive,
-          team: p.team
+          team: p.team,
+          isBot: p.isBot
         })),
-        gameState: cs16Rooms.get(roomId).gameState
+        gameState: cs16Rooms.get(roomId).gameState,
+        name: safeName,
+        hasPassword
       });
       return ack && ack({ ok: true, roomId });
     } catch (e) {
@@ -1249,12 +1503,17 @@ io.on('connection', socket => {
   });
 
   // Join an existing CS16 room
-  socket.on('cs16:join-room', ({ roomId, userId, username }, ack) => {
+  socket.on('cs16:join-room', ({ roomId, userId, username, password }, ack) => {
     try {
       if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
       const room = cs16Rooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       if (room.gameState.gameStarted) return ack && ack({ ok: false, error: 'already_started' });
+
+      // Check password if room has one
+      if (room.password && room.password !== password) {
+        return ack && ack({ ok: false, error: 'wrong_password' });
+      }
 
       // Assign team (simple alternating logic)
       const currentPlayers = Array.from(room.players.values());
@@ -1274,21 +1533,30 @@ io.on('connection', socket => {
 
       socket.join(`cs16:${roomId}`);
 
+      // Update public server info
+      const publicServer = publicServers.get('cs16').get(roomId);
+      if (publicServer) {
+        publicServer.playerCount = room.players.size;
+      }
+
       // Notify all in room of updated players
-      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
-        id,
-        username: p.username,
-        position: p.position,
-        rotation: p.rotation,
-        health: p.health,
-        isAlive: p.isAlive,
-        team: p.team
-      }));
+      const allParticipants = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
       io.to(`cs16:${roomId}`).emit('cs16:room-state', {
         roomId,
         hostId: room.hostId,
-        players: playersList,
-        gameState: room.gameState
+        players: allParticipants.map(([id, p]) => ({
+          id,
+          username: p.username,
+          position: p.position,
+          rotation: p.rotation,
+          health: p.health,
+          isAlive: p.isAlive,
+          team: p.team,
+          isBot: p.isBot
+        })),
+        gameState: room.gameState,
+        name: room.name,
+        hasPassword: !!room.password
       });
       return ack && ack({ ok: true, roomId });
     } catch (e) {
@@ -1306,33 +1574,54 @@ io.on('connection', socket => {
       room.players.delete(userId);
       socket.leave(`cs16:${roomId}`);
 
-      // If room is now empty, delete it
+      // If room is now empty, delete it and remove from public servers
       if (room.players.size === 0) {
         cs16Rooms.delete(roomId);
+        publicServers.get('cs16').delete(roomId);
         return ack && ack({ ok: true });
       }
 
       // If host left, pick a new host
       if (room.hostId === userId) {
-        const next = room.players.keys().next();
-        room.hostId = next.value;
+        const remainingPlayers = Array.from(room.players.keys());
+        if (remainingPlayers.length > 0) {
+          room.hostId = remainingPlayers[0];
+          const newHost = room.players.get(remainingPlayers[0]);
+          if (newHost) {
+            // Update public server host info
+            const publicServer = publicServers.get('cs16').get(roomId);
+            if (publicServer) {
+              publicServer.hostId = remainingPlayers[0];
+              publicServer.hostName = newHost.username;
+            }
+          }
+        }
+      }
+
+      // Update public server player count
+      const publicServer = publicServers.get('cs16').get(roomId);
+      if (publicServer) {
+        publicServer.playerCount = room.players.size;
       }
 
       // Emit updated room state
-      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
-        id,
-        username: p.username,
-        position: p.position,
-        rotation: p.rotation,
-        health: p.health,
-        isAlive: p.isAlive,
-        team: p.team
-      }));
+      const allParticipants = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
       io.to(`cs16:${roomId}`).emit('cs16:room-state', {
         roomId,
         hostId: room.hostId,
-        players: playersList,
-        gameState: room.gameState
+        players: allParticipants.map(([id, p]) => ({
+          id,
+          username: p.username,
+          position: p.position,
+          rotation: p.rotation,
+          health: p.health,
+          isAlive: p.isAlive,
+          team: p.team,
+          isBot: p.isBot
+        })),
+        gameState: room.gameState,
+        name: room.name,
+        hasPassword: !!room.password
       });
       return ack && ack({ ok: true });
     } catch (e) {
@@ -1385,18 +1674,35 @@ io.on('connection', socket => {
         player.position = { x: Math.random() * 20 - 10, y: 0, z: Math.random() * 20 - 10 };
       }
 
+      // Reset bot positions and health
+      for (const [botId, bot] of room.bots.entries()) {
+        bot.health = 100;
+        bot.isAlive = true;
+        bot.position = { x: Math.random() * 20 - 10, y: 0, z: Math.random() * 20 - 10 };
+        bot.lastAction = Date.now();
+        bot.target = null;
+      }
+
+      const allParticipants = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
+
       io.to(`cs16:${roomId}`).emit('cs16:game-update', {
         gameState: room.gameState,
-        players: Array.from(room.players.entries()).map(([id, p]) => ({
+        players: allParticipants.map(([id, p]) => ({
           id,
           username: p.username,
           position: p.position,
           rotation: p.rotation,
           health: p.health,
           isAlive: p.isAlive,
-          team: p.team
+          team: p.team,
+          isBot: p.isBot
         }))
       });
+
+      // Start bot AI loop
+      if (room.bots.size > 0) {
+        startBotAI(roomId);
+      }
 
       // Start round timer
       const roundTimer = setInterval(() => {
