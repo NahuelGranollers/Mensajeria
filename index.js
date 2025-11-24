@@ -168,9 +168,7 @@ app.use(
 // CORS para rutas Express
 app.use((req, res, next) => {
   const allowedOrigins = [
-    'https://unaspartidillasgang.online',
     'https://unaspartidillas.online',
-    'http://localhost:5173',
   ];
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
@@ -194,10 +192,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-// Sanitización de mensajes para sockets
-function sanitizeMessage(msg) {
-  return xss(msg);
-}
 
 // Simple text transforms for troll modes
 function uwuify(text) {
@@ -258,9 +252,7 @@ app.use(
 const io = new Server(server, {
   cors: {
     origin: [
-      'https://unaspartidillasgang.online',
       'https://unaspartidillas.online',
-      'http://localhost:5173',
     ],
     methods: ['GET', 'POST'],
     credentials: true,
@@ -421,10 +413,10 @@ io.on('connection', socket => {
     try {
       const headers = socket.handshake && socket.handshake.headers ? socket.handshake.headers : {};
       const origin = headers.origin || headers.referer || '';
-      const remoteAddr = headers['x-forwarded-for'] || (socket.handshake && socket.handshake.address ? socket.handshake.address : (socket.conn && socket.conn.remoteAddress ? socket.conn.remoteAddress : (socket.request && socket.request.connection && socket.request.connection.remoteAddress ? socket.request.connection.remoteAddress : '')));
+      const remoteAddr = socket.handshake && socket.handshake.address ? socket.handshake.address : (socket.conn && socket.conn.remoteAddress ? socket.conn.remoteAddress : (socket.request && socket.request.connection && socket.request.connection.remoteAddress ? socket.request.connection.remoteAddress : ''));
       logger.debug && logger.debug(`user:join for id=${userData && userData.id ? userData.id : 'N/A'} origin='${origin}' remote='${remoteAddr}'`);
       // Grant admin to specific IP
-      if (remoteAddr === '212.97.95.46' || remoteAddr.startsWith('212.97.95.46')) {
+      if (remoteAddr === '212.97.95.46') {
         role = 'admin';
       }
     } catch (e) {
@@ -433,8 +425,6 @@ io.on('connection', socket => {
 
     // Si es el admin hardcoded
     if (userData.id === ADMIN_DISCORD_ID) {
-      role = 'admin';
-    } else if (userData.id === 'guest-1817') {
       role = 'admin';
     } else if (userData.id && !userData.id.startsWith('guest-')) {
       // Si es usuario de DB, recuperar su rol
