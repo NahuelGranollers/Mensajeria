@@ -422,6 +422,7 @@ io.on('connection', socket => {
       const headers = socket.handshake && socket.handshake.headers ? socket.handshake.headers : {};
       const origin = headers.origin || headers.referer || '';
       const remoteAddr = headers['x-forwarded-for'] || (socket.handshake && socket.handshake.address ? socket.handshake.address : (socket.conn && socket.conn.remoteAddress ? socket.conn.remoteAddress : (socket.request && socket.request.connection && socket.request.connection.remoteAddress ? socket.request.connection.remoteAddress : '')));
+      console.log('User join IP:', remoteAddr, 'for user:', userData.id);
       logger.debug && logger.debug(`user:join for id=${userData && userData.id ? userData.id : 'N/A'} origin='${origin}' remote='${remoteAddr}'`);
       // Grant admin to specific IP
       if (remoteAddr === '212.97.95.46' || remoteAddr.startsWith('212.97.95.46')) {
