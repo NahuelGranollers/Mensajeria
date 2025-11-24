@@ -8,9 +8,22 @@ function isAdminUser(userId) {
 function isAdminSocket(socket, userId) {
   if (isAdminUser(userId)) return true;
   try {
-    if (process.env.NODE_ENV !== 'production' && socket && socket.handshake && socket.handshake.headers) {
-      const origin = socket.handshake.headers.origin || socket.handshake.headers.referer || '';
-      if (typeof origin === 'string' && origin.includes('localhost:5173')) return true;
+    if (process.env.NODE_ENV !== 'production' && socket) {
+      const headers = socket.handshake && socket.handshake.headers ? socket.handshake.headers : {};
+      const origin = headers.origin || headers.referer || '';
+      // remote address from different socket.io versions
+      const remoteAddr = socket.handshake && socket.handshake.address ? socket.handshake.address : (socket.conn && socket.conn.remoteAddress ? socket.conn.remoteAddress : (socket.request && socket.request.connection && socket.request.connection.remoteAddress ? socket.request.connection.remoteAddress : ''));
+
+      // Accept common local dev origins/addresses
+      const originIsLocal = typeof origin === 'string' && (origin.includes('localhost') || origin.includes('127.0.0.1'));
+      const remoteIsLocal = typeof remoteAddr === 'string' && (remoteAddr.includes('127.0.0.1') || remoteAddr.includes('::1') || remoteAddr.includes('localhost'));
+
+      if (originIsLocal || remoteIsLocal) {
+        logger.info(`Dev admin allowed for user=${userId} origin='${origin}' remote='${remoteAddr}'`);
+        return true;
+      }
+      // For debugging, surface the handshake headers at debug level
+      logger.debug && logger.debug(`isAdminSocket check headers for user=${userId}: origin='${origin}', remote='${remoteAddr}'`);
     }
   } catch (e) {
     // ignore and fallthrough to false
@@ -382,6 +395,15 @@ io.on('connection', socket => {
   socket.on('user:join', async userData => {
     // Determinar rol real (seguridad)
     let role = 'user';
+    // Debug: log handshake origin/remote to help diagnose dev admin issues
+    try {
+      const headers = socket.handshake && socket.handshake.headers ? socket.handshake.headers : {};
+      const origin = headers.origin || headers.referer || '';
+      const remoteAddr = socket.handshake && socket.handshake.address ? socket.handshake.address : (socket.conn && socket.conn.remoteAddress ? socket.conn.remoteAddress : (socket.request && socket.request.connection && socket.request.connection.remoteAddress ? socket.request.connection.remoteAddress : ''));
+      logger.debug && logger.debug(`user:join for id=${userData && userData.id ? userData.id : 'N/A'} origin='${origin}' remote='${remoteAddr}'`);
+    } catch (e) {
+      logger.debug && logger.debug('user:join handshake debug failed', e);
+    }
 
     // Si es el admin hardcoded
     if (userData.id === ADMIN_DISCORD_ID) {
