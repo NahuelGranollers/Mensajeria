@@ -394,6 +394,36 @@ app.post('/admin/unlock', catchAsync(async (req, res) => {
   return res.status(401).json({ ok: false, error: 'invalid_password' });
 }));
 
+// Admin console route for environments without stdin (protected by ADMIN_CONSOLE_TOKEN env var)
+// Use this to run: curl -X POST -H "Authorization: Bearer $ADMIN_CONSOLE_TOKEN" -H "Content-Type: application/json" -d '{"action":"on"}' https://your-server/admin/console
+const ADMIN_CONSOLE_TOKEN = process.env.ADMIN_CONSOLE_TOKEN || null;
+app.post('/admin/console', catchAsync(async (req, res) => {
+  if (!ADMIN_CONSOLE_TOKEN) return res.status(403).json({ ok: false, error: 'no_console_token_configured' });
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return res.status(401).json({ ok: false, error: 'missing_bearer_token' });
+  const token = auth.slice(7).trim();
+  if (token !== ADMIN_CONSOLE_TOKEN) return res.status(401).json({ ok: false, error: 'invalid_token' });
+
+  const { action } = req.body || {};
+  if (!action) return res.status(400).json({ ok: false, error: 'missing_action' });
+
+  if (action === 'on' || action === 'enable') {
+    adminPasswordUnlocked = true;
+    logger.info('Admin unlocked via /admin/console');
+    return res.json({ ok: true, status: 'admin_on' });
+  }
+  if (action === 'off' || action === 'disable') {
+    adminPasswordUnlocked = false;
+    logger.info('Admin locked via /admin/console');
+    return res.json({ ok: true, status: 'admin_off' });
+  }
+  if (action === 'status') {
+    return res.json({ ok: true, status: adminPasswordUnlocked ? 'admin_on' : 'admin_off' });
+  }
+
+  return res.status(400).json({ ok: false, error: 'unknown_action' });
+}));
+
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
     res.clearCookie('upg.sid');
