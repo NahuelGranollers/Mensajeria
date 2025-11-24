@@ -236,118 +236,37 @@ function updateBotAI(room, botId, bot) {
   });
 }
 
-// Small default word list for rounds (can be extended or loaded from DB)
-const IMPOSTOR_WORDS = [
-  'Manzana',
-  'Sombrero',
-  'Pescado',
-  'Llave',
-  'Gato',
-  'Cohete',
-  'Reloj',
-  'Libro',
-  'Sandía',
-  'Bicicleta',
-  'Estatua',
-  'Calcetín',
-  'Pastel',
-  'Ovni',
-  'Pingüino',
-  'Mariposa',
-  'Tiburón',
-  'Cohete',
-  'Espada',
-  'Sombrero',
-  'Guisante',
-  'Moneda',
-  'Teléfono',
-  'Telefono',
-  'Camisa',
-  'Zapato',
-  'Cámara',
-  'Silla',
-  'Mesa',
-  'Guitarra',
-  'Piano',
-  'Auto',
-  'Helado',
-  'Globo',
-  'RelojDeArena',
-  'Maricón',
-  'Aguacate',
-  'Videojuegos',
-  'Pizza',
-  'Gato',
-  'Perro',
-  'Elefante',
-  'Jirafa',
-  'Tortuga',
-  'Dragón',
-  'Unicornio',
-  'Superhéroe',
-  'Pirata',
-  'Vaquero',
-  'Astronauta',
-  'Chef',
-  'Mago',
-  'Princesa',
-  'Robot',
-  'Zombie',
-  'Vampiro',
-  'Fantasma',
-  'Duende',
-  'Hada',
-  'Sirena',
-  'Centauro',
-  'Minotauro',
-  'Cíclope',
-  'Esfinge',
-  'Quimera',
-  'Grifo',
-  'Fénix',
-  'Basilisco',
-  'Mantícora',
-  'Yeti',
-  'Bigfoot',
-  'Alienígena',
-  'Ovni',
-  'Tren',
-  'Avión',
-  'Barco',
-  'Submarino',
-  'Moto',
-  'Patineta',
-  'Bicicleta',
-  'Monopatín',
-  'Patinete',
-  'Carrito',
-  'Muñeca',
-  'Pelota',
-  'Cometa',
-  'Yoyo',
-  'Balón',
-  'Raqueta',
-  'Bate',
-  'Guante',
-  'Casco',
-  'Botas',
-  'Guantes',
-  'Bufanda',
-  'Gorra',
-  'Sombrero',
-  'Lentes',
-  'Reloj',
-  'Anillo',
-  'Collar',
-  'Pulsera',
-  'Pendientes',
-  'Cinturón',
-  'Mochila',
-  'Maleta',
-  'Cartera',
-  'Enano',
-  'Down',
-];
+// Categorized word lists
+const IMPOSTOR_CATEGORIES = {
+  'General': [
+    'Manzana', 'Sombrero', 'Pescado', 'Llave', 'Gato', 'Cohete', 'Reloj', 'Libro', 'Sandía', 'Bicicleta',
+    'Estatua', 'Calcetín', 'Pastel', 'Ovni', 'Pingüino', 'Mariposa', 'Tiburón', 'Espada', 'Guisante', 'Moneda',
+    'Teléfono', 'Camisa', 'Zapato', 'Cámara', 'Silla', 'Mesa', 'Guitarra', 'Piano', 'Auto', 'Helado',
+    'Globo', 'RelojDeArena', 'Aguacate', 'Videojuegos', 'Pizza', 'Perro', 'Elefante', 'Jirafa', 'Tortuga'
+  ],
+  'Fantasía': [
+    'Dragón', 'Unicornio', 'Superhéroe', 'Pirata', 'Vaquero', 'Astronauta', 'Mago', 'Princesa', 'Robot', 'Zombie',
+    'Vampiro', 'Fantasma', 'Duende', 'Hada', 'Sirena', 'Centauro', 'Minotauro', 'Cíclope', 'Esfinge', 'Quimera',
+    'Grifo', 'Fénix', 'Basilisco', 'Mantícora', 'Yeti', 'Bigfoot', 'Alienígena', 'Enano'
+  ],
+  'Transporte': [
+    'Tren', 'Avión', 'Barco', 'Submarino', 'Moto', 'Patineta', 'Bicicleta', 'Monopatín', 'Patinete', 'Carrito',
+    'Cohete', 'Helicóptero', 'Globo Aerostático', 'Trineo', 'Carruaje', 'Taxi', 'Autobús', 'Camión'
+  ],
+  'Objetos': [
+    'Muñeca', 'Pelota', 'Cometa', 'Yoyo', 'Balón', 'Raqueta', 'Bate', 'Guante', 'Casco', 'Botas',
+    'Bufanda', 'Gorra', 'Lentes', 'Anillo', 'Collar', 'Pulsera', 'Pendientes', 'Cinturón', 'Mochila',
+    'Maleta', 'Cartera', 'Paraguas', 'Espejo', 'Peine', 'Cepillo', 'Llave Inglesa', 'Martillo'
+  ],
+  'Lugares': [
+    'Playa', 'Montaña', 'Bosque', 'Desierto', 'Ciudad', 'Pueblo', 'Escuela', 'Hospital', 'Aeropuerto', 'Estación',
+    'Parque', 'Cine', 'Teatro', 'Museo', 'Biblioteca', 'Restaurante', 'Hotel', 'Estadio', 'Gimnasio', 'Piscina',
+    'Zoológico', 'Granja', 'Castillo', 'Palacio', 'Cueva', 'Isla', 'Volcán', 'Espacio'
+  ]
+};
+
+// Flatten for backward compatibility or random "Mix" mode
+const IMPOSTOR_WORDS = Object.values(IMPOSTOR_CATEGORIES).flat();
 
 // ✅ Sistema de Logs Profesional con Winston
 const logger = winston.createLogger({
@@ -1172,15 +1091,20 @@ io.on('connection', socket => {
   });
 
   // Host starts a round: pick word and assign one impostor
-  socket.on('impostor:start', ({ roomId, hostId }, ack) => {
+  socket.on('impostor:start', ({ roomId, hostId, category, timerDuration }, ack) => {
     try {
       const room = impostorRooms.get(roomId);
       if (!room) return ack && ack({ ok: false, error: 'not_found' });
       if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
       if (room.started) return ack && ack({ ok: false, error: 'already_started' });
 
-      // pick a random word and generate a randomized turn order among players
-      const allWords = [...IMPOSTOR_WORDS, ...room.customWords];
+      // pick a random word based on category
+      let wordList = IMPOSTOR_WORDS;
+      if (category && IMPOSTOR_CATEGORIES[category]) {
+        wordList = IMPOSTOR_CATEGORIES[category];
+      }
+      
+      const allWords = [...wordList, ...room.customWords];
       const word = allWords[Math.floor(Math.random() * allWords.length)];
       const playerIds = Array.from(room.players.keys());
       if (playerIds.length < 2) return ack && ack({ ok: false, error: 'not_enough_players' });
@@ -1202,6 +1126,25 @@ io.on('connection', socket => {
       room.voting = false;
       room.turnOrder = shuffled;
       room.currentTurn = shuffled[0] || null;
+
+      // Timer logic
+      if (room.timerInterval) clearInterval(room.timerInterval);
+      if (timerDuration && timerDuration > 0) {
+        room.timeLeft = timerDuration;
+        room.timerInterval = setInterval(() => {
+          if (!impostorRooms.has(roomId)) {
+            clearInterval(room.timerInterval);
+            return;
+          }
+          room.timeLeft--;
+          io.to(`impostor:${roomId}`).emit('impostor:timer-update', { timeLeft: room.timeLeft });
+          
+          if (room.timeLeft <= 0) {
+            clearInterval(room.timerInterval);
+            io.to(`impostor:${roomId}`).emit('impostor:timer-end');
+          }
+        }, 1000);
+      }
 
       // Emit turn order and current turn so clients can animate/select whose turn it is
       io.to(`impostor:${roomId}`).emit('impostor:turn-order', {
@@ -1226,6 +1169,8 @@ io.on('connection', socket => {
         roomId,
         started: true,
         playerCount: playerIds.length,
+        category: category || 'General',
+        timerDuration: timerDuration || 0
       });
       return ack && ack({ ok: true });
     } catch (e) {
@@ -1322,6 +1267,7 @@ io.on('connection', socket => {
         if (wasImpostor) {
           // End the round without revealing impostor publicly
           // reset round state
+          if (room.timerInterval) clearInterval(room.timerInterval);
           room.started = false;
           room.word = null;
           room.impostorId = null;
@@ -1371,12 +1317,14 @@ io.on('connection', socket => {
       if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
 
       // reset state
+      if (room.timerInterval) clearInterval(room.timerInterval);
       room.started = false;
       room.word = null;
       room.impostorId = null;
       room.voting = false;
       room.votes = new Map();
       room.revealedInnocents = new Set(); // Clear revealed innocents
+      room.timeLeft = 0;
 
       // Notify clients and allow host to start a new round
       io.to(`impostor:${roomId}`).emit('impostor:restarted', { roomId });
@@ -1401,933 +1349,69 @@ io.on('connection', socket => {
       return ack && ack({ ok: false, error: 'internal' });
     }
   });
-
-  // Reveal all roles to the room (host only)
-  socket.on('impostor:reveal-all', ({ roomId, hostId }, ack) => {
-    try {
-      const room = impostorRooms.get(roomId);
-      if (!room) return ack && ack({ ok: false, error: 'not_found' });
-      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
-      if (!room.started) return ack && ack({ ok: false, error: 'not_started' });
-
-      const revealedPlayers = [];
-      for (const [pid, p] of room.players.entries()) {
-        revealedPlayers.push({
-          name: p.username,
-          wasInnocent: pid !== room.impostorId,
-        });
-      }
-      io.to(`impostor:${roomId}`).emit('impostor:reveal-all', {
-        players: revealedPlayers,
-        word: room.word,
-      });
-      return ack && ack({ ok: true });
-    } catch (e) {
-      logger.error('Error revealing all roles', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
-  // ==========================
-  // CS16 Game Handlers
-  // ==========================
-  // Create a CS16 room and become host
-  socket.on('cs16:create-room', ({ roomId, userId, username, botCount = 0, name, password }, ack) => {
-    try {
-      if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
-      if (cs16Rooms.has(roomId)) return ack && ack({ ok: false, error: 'room_exists' });
-
-      const safeName = name ? sanitizeMessage(name.substring(0, 50)) : `Sala CS16 de ${username}`;
-      const hasPassword = password && password.trim().length > 0;
-
-      const players = new Map();
-      players.set(userId, {
-        socketId: socket.id,
-        username,
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        health: 100,
-        isAlive: true,
-        team: 'counter-terrorist',
-        isBot: false
-      });
-
-      // Create bots if requested
-      const bots = new Map();
-      for (let i = 0; i < botCount; i++) {
-        const botId = `bot_${roomId}_${i}`;
-        const botTeam = i % 2 === 0 ? 'counter-terrorist' : 'terrorist'; // Alternate teams
-        bots.set(botId, {
-          id: botId,
-          username: `Bot ${i + 1}`,
-          position: { x: Math.random() * 20 - 10, y: 0, z: Math.random() * 20 - 10 },
-          rotation: { x: 0, y: 0, z: 0 },
-          health: 100,
-          isAlive: true,
-          team: botTeam,
-          isBot: true,
-          lastAction: Date.now(),
-          target: null
-        });
-      }
-
-      cs16Rooms.set(roomId, {
-        hostId: userId,
-        players,
-        bots,
-        gameState: {
-          gameStarted: false,
-          roundTime: 0,
-          bombPlanted: false,
-          bombDefused: false,
-          winner: null
-        },
-        name: safeName,
-        password: hasPassword ? password.trim() : null,
-        createdAt: new Date().toISOString()
-      });
-
-      // Register as public server
-      publicServers.get('cs16').set(roomId, {
-        name: safeName,
-        hostId: userId,
-        hostName: username,
-        playerCount: 1,
-        maxPlayers: 10,
-        hasPassword,
-        createdAt: new Date().toISOString(),
-        gameState: { gameStarted: false, roundTime: 0 },
-        botCount
-      });
-
-      // Broadcast updated server list so all clients see the new CS16 room
-      broadcastPublicServers();
-
-      socket.join(`cs16:${roomId}`);
-
-      // Combine players and bots for room state
-      const allParticipants = [...Array.from(players.entries()), ...Array.from(bots.entries())];
-
-      socket.emit('cs16:room-state', {
-        roomId,
-        hostId: userId,
-        players: allParticipants.map(([id, p]) => ({
-          id,
-          username: p.username,
-          position: p.position,
-          rotation: p.rotation,
-          health: p.health,
-          isAlive: p.isAlive,
-          team: p.team,
-          isBot: p.isBot
-        })),
-        gameState: cs16Rooms.get(roomId).gameState,
-        name: safeName,
-        hasPassword
-      });
-      return ack && ack({ ok: true, roomId });
-    } catch (e) {
-      logger.error('Error creating CS16 room', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
-  // Join an existing CS16 room
-  socket.on('cs16:join-room', ({ roomId, userId, username, password }, ack) => {
-    try {
-      if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
-      const room = cs16Rooms.get(roomId);
-      if (!room) return ack && ack({ ok: false, error: 'not_found' });
-      if (room.gameState.gameStarted) return ack && ack({ ok: false, error: 'already_started' });
-
-      // Check password if room has one
-      if (room.password && room.password !== password) {
-        return ack && ack({ ok: false, error: 'wrong_password' });
-      }
-
-      // Assign team (simple alternating logic)
-      const currentPlayers = Array.from(room.players.values());
-      const terrorists = currentPlayers.filter(p => p.team === 'terrorist').length;
-      const counterTerrorists = currentPlayers.filter(p => p.team === 'counter-terrorist').length;
-      const team = terrorists <= counterTerrorists ? 'terrorist' : 'counter-terrorist';
-
-      room.players.set(userId, {
-        socketId: socket.id,
-        username,
-        position: { x: Math.random() * 20 - 10, y: 0, z: Math.random() * 20 - 10 },
-        rotation: { x: 0, y: 0, z: 0 },
-        health: 100,
-        isAlive: true,
-        team
-      });
-
-      socket.join(`cs16:${roomId}`);
-
-      // Update public server info
-      const publicServer = publicServers.get('cs16').get(roomId);
-      if (publicServer) {
-        publicServer.playerCount = room.players.size;
-      }
-
-      // Broadcast updated server list so everyone sees the new player count
-      broadcastPublicServers();
-
-      // Notify all in room of updated players
-      const allParticipants = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
-      io.to(`cs16:${roomId}`).emit('cs16:room-state', {
-        roomId,
-        hostId: room.hostId,
-        players: allParticipants.map(([id, p]) => ({
-          id,
-          username: p.username,
-          position: p.position,
-          rotation: p.rotation,
-          health: p.health,
-          isAlive: p.isAlive,
-          team: p.team,
-          isBot: p.isBot
-        })),
-        gameState: room.gameState,
-        name: room.name,
-        hasPassword: !!room.password
-      });
-      return ack && ack({ ok: true, roomId });
-    } catch (e) {
-      logger.error('Error joining CS16 room', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
-  // Leave a CS16 room
-  socket.on('cs16:leave-room', ({ roomId, userId }, ack) => {
-    try {
-      const room = cs16Rooms.get(roomId);
-      if (!room) return ack && ack({ ok: false, error: 'not_found' });
-      const leavingPlayer = room.players.get(userId);
-      room.players.delete(userId);
-      socket.leave(`cs16:${roomId}`);
-
-      // If room is now empty, delete it and remove from public servers
-      if (room.players.size === 0) {
-        cs16Rooms.delete(roomId);
-        publicServers.get('cs16').delete(roomId);
-        // Broadcast removal of CS16 room
-        broadcastPublicServers();
-        return ack && ack({ ok: true });
-      }
-
-      // If host left, pick a new host
-      if (room.hostId === userId) {
-        const remainingPlayers = Array.from(room.players.keys());
-        if (remainingPlayers.length > 0) {
-          room.hostId = remainingPlayers[0];
-          const newHost = room.players.get(remainingPlayers[0]);
-          if (newHost) {
-            // Update public server host info
-            const publicServer = publicServers.get('cs16').get(roomId);
-            if (publicServer) {
-              publicServer.hostId = remainingPlayers[0];
-              publicServer.hostName = newHost.username;
-            }
-          }
-        }
-      }
-
-      // Update public server player count
-      const publicServer = publicServers.get('cs16').get(roomId);
-      if (publicServer) {
-        publicServer.playerCount = room.players.size;
-      }
-
-      // Broadcast updated server list so everyone sees the change
-      broadcastPublicServers();
-
-      // Emit updated room state
-      const allParticipants = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
-      io.to(`cs16:${roomId}`).emit('cs16:room-state', {
-        roomId,
-        hostId: room.hostId,
-        players: allParticipants.map(([id, p]) => ({
-          id,
-          username: p.username,
-          position: p.position,
-          rotation: p.rotation,
-          health: p.health,
-          isAlive: p.isAlive,
-          team: p.team,
-          isBot: p.isBot
-        })),
-        gameState: room.gameState,
-        name: room.name,
-        hasPassword: !!room.password
-      });
-      return ack && ack({ ok: true });
-    } catch (e) {
-      logger.error('Error leaving CS16 room', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
-  // Player movement sync
-  socket.on('cs16:player-move', ({ roomId, userId, position, rotation }) => {
-    try {
-      const room = cs16Rooms.get(roomId);
-      if (!room || !room.players.has(userId)) return;
-
-      const player = room.players.get(userId);
-      if (player) {
-        player.position = position;
-        player.rotation = rotation;
-
-        // Broadcast to other players in room
-        socket.to(`cs16:${roomId}`).emit('cs16:player-update', {
-          userId,
-          position,
-          rotation
-        });
-      }
-    } catch (e) {
-      logger.error('Error handling player movement', e);
-    }
-  });
-
-  // Start CS16 game
-  socket.on('cs16:start-game', ({ roomId, hostId }, ack) => {
-    try {
-      const room = cs16Rooms.get(roomId);
-      if (!room) return ack && ack({ ok: false, error: 'not_found' });
-      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
-      if (room.gameState.gameStarted) return ack && ack({ ok: false, error: 'already_started' });
-
-      room.gameState.gameStarted = true;
-      room.gameState.roundTime = 120; // 2 minutes
-      room.gameState.bombPlanted = false;
-      room.gameState.bombDefused = false;
-      room.gameState.winner = null;
-
-      // Reset player positions and health
-      for (const [userId, player] of room.players.entries()) {
-        player.health = 100;
-        player.isAlive = true;
-        player.position = { x: Math.random() * 20 - 10, y: 0, z: Math.random() * 20 - 10 };
-      }
-
-      // Reset bot positions and health
-      for (const [botId, bot] of room.bots.entries()) {
-        bot.health = 100;
-        bot.isAlive = true;
-        bot.position = { x: Math.random() * 20 - 10, y: 0, z: Math.random() * 20 - 10 };
-        bot.lastAction = Date.now();
-        bot.target = null;
-      }
-
-      const allParticipants = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
-
-      io.to(`cs16:${roomId}`).emit('cs16:game-update', {
-        gameState: room.gameState,
-        players: allParticipants.map(([id, p]) => ({
-          id,
-          username: p.username,
-          position: p.position,
-          rotation: p.rotation,
-          health: p.health,
-          isAlive: p.isAlive,
-          team: p.team,
-          isBot: p.isBot
-        }))
-      });
-
-      // Start bot AI loop
-      if (room.bots.size > 0) {
-        startBotAI(roomId);
-      }
-
-      // Start round timer
-      const roundTimer = setInterval(() => {
-        if (!cs16Rooms.has(roomId)) {
-          clearInterval(roundTimer);
-          return;
-        }
-
-        const currentRoom = cs16Rooms.get(roomId);
-        currentRoom.gameState.roundTime--;
-
-        if (currentRoom.gameState.roundTime <= 0) {
-          // Round ended - terrorists win if bomb planted, counter-terrorists win otherwise
-          currentRoom.gameState.winner = currentRoom.gameState.bombPlanted ? 'terrorists' : 'counter-terrorists';
-          currentRoom.gameState.gameStarted = false;
-
-          io.to(`cs16:${roomId}`).emit('cs16:game-update', {
-            gameState: currentRoom.gameState
-          });
-
-          clearInterval(roundTimer);
-        } else {
-          io.to(`cs16:${roomId}`).emit('cs16:game-update', {
-            gameState: { roundTime: currentRoom.gameState.roundTime }
-          });
-        }
-      }, 1000);
-
-      return ack && ack({ ok: true });
-    } catch (e) {
-      logger.error('Error starting CS16 game', e);
-      return ack && ack({ ok: false, error: 'internal' });
-    }
-  });
-
-  // Handle player actions (shoot, plant bomb, defuse, etc.)
-  socket.on('cs16:player-action', ({ roomId, userId, action, targetId }) => {
-    try {
-      const room = cs16Rooms.get(roomId);
-      if (!room || !room.players.has(userId)) return;
-
-      const player = room.players.get(userId);
-      if (!player || !player.isAlive) return;
-
-      switch (action) {
-        case 'shoot':
-          if (targetId && room.players.has(targetId)) {
-            const target = room.players.get(targetId);
-            if (target && target.isAlive && target.team !== player.team) {
-              target.health = Math.max(0, target.health - 50); // Simple damage
-              if (target.health <= 0) {
-                target.isAlive = false;
-              }
-
-              io.to(`cs16:${roomId}`).emit('cs16:player-hit', {
-                shooterId: userId,
-                targetId,
-                damage: 50,
-                killed: target.health <= 0
-              });
-            }
-          }
-          break;
-
-        case 'plant-bomb':
-          if (player.team === 'terrorist' && !room.gameState.bombPlanted) {
-            room.gameState.bombPlanted = true;
-            io.to(`cs16:${roomId}`).emit('cs16:bomb-planted', { planterId: userId });
-          }
-          break;
-
-        case 'defuse-bomb':
-          if (player.team === 'counter-terrorist' && room.gameState.bombPlanted) {
-            room.gameState.bombDefused = true;
-            room.gameState.winner = 'counter-terrorists';
-            room.gameState.gameStarted = false;
-            io.to(`cs16:${roomId}`).emit('cs16:bomb-defused', { defuserId: userId });
-          }
-          break;
-      }
-
-      // Check win conditions
-      const aliveTerrorists = Array.from(room.players.values()).filter(p => p.team === 'terrorist' && p.isAlive).length;
-      const aliveCounterTerrorists = Array.from(room.players.values()).filter(p => p.team === 'counter-terrorist' && p.isAlive).length;
-
-      if (aliveTerrorists === 0) {
-        room.gameState.winner = 'counter-terrorists';
-        room.gameState.gameStarted = false;
-      } else if (aliveCounterTerrorists === 0) {
-        room.gameState.winner = 'terrorists';
-        room.gameState.gameStarted = false;
-      }
-
-      if (room.gameState.winner) {
-        io.to(`cs16:${roomId}`).emit('cs16:game-update', {
-          gameState: room.gameState
-        });
-      }
-    } catch (e) {
-      logger.error('Error handling player action', e);
-    }
-  });
-
-  // 🔒 Admin: Mensaje global
-  socket.on('admin:global-message', async data => {
-    const { content, adminId, sendAsBot, channelId } = data;
-    if (!isAdminUser(adminId)) {
-      logger.warn(
-        `Intento de mensaje global por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
-    // If requested, send as the bot into a specific channel (or general)
-    const targetChannel = channelId || 'general';
-    if (sendAsBot) {
-      const botMessage = {
-        id: crypto.randomUUID(),
-        channelId: targetChannel,
-        userId: 'bot',
-        username: BOT_USER.username,
-        avatar: BOT_USER.avatar,
-        content: sanitizeMessage(String(content).substring(0, 2000)),
-        timestamp: new Date().toISOString(),
-        isSystem: false,
-        role: 'bot',
-      };
-      try {
-        await db.saveMessage(botMessage);
-      } catch (err) {
-        logger.error('Error guardando mensaje global del bot:', err);
-      }
-      io.to(targetChannel).emit('message:received', db.sanitizeMessageOutput(botMessage));
-      logger.info(
-        `Mensaje global (como bot) enviado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
-    // Emitir a todos los canales (legacy global notice)
-    io.emit('admin:global-message', { content });
-    logger.info(
-      `Mensaje global enviado por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-    );
-  });
-
-  // 🔒 Admin: Modo troll
-  socket.on('admin:troll-mode', async data => {
-    const { userId, mode, adminId } = data; // mode can be 'uwu', 'meow', 'kawaii', or null to clear
-    if (!isAdminUser(adminId)) {
-      logger.warn(
-        `Intento de modo troll por no admin: ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-      return;
-    }
-
-    if (!userId) return;
-    const safeMode = mode && typeof mode === 'string' ? mode : null;
-    if (safeMode) {
-      trolledUsers.set(userId, safeMode);
-      io.emit('admin:user-troll', { userId, mode: safeMode });
-      logger.info(
-        `Modo troll '${safeMode}' activado para usuario ${userId} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-    } else {
-      trolledUsers.delete(userId);
-      io.emit('admin:user-troll:cleared', { userId });
-      logger.info(
-        `Modo troll desactivado para usuario ${userId} por admin ${adminId ? adminId.slice(0, 6) + '...' : 'N/A'}`
-      );
-    }
-  });
-
-  // ✅ Enviar mensaje
-  socket.on('message:send', async (msgData, ack) => {
-    if (!msgData.content || !msgData.content.trim()) return;
-    // Basic rate limiting per socket: 2 messages per second (adjustable)
-    try {
-      const now = Date.now();
-      if (now - lastMessageAt.time < 500 && !(msgData.admin && msgData.admin === true)) {
-        // ignore or drop frequent messages from non-admins
-        if (ack && typeof ack === 'function') {
-          try {
-            ack({ ok: false, error: 'rate_limited' });
-          } catch (e) {}
-        } else {
-          socket.emit('message:send:rate_limited');
-        }
-        return;
-      }
-      lastMessageAt.time = now;
-    } catch (e) {}
-    // Sanitizar y validar datos
-    const safeContent = sanitizeMessage(msgData.content.substring(0, 2000));
-    const safeUsername = sanitizeMessage(msgData.username);
-    const safeAvatar = sanitizeMessage(msgData.avatar);
-    const safeChannelId = sanitizeMessage(msgData.channelId || 'general');
-    const safeUserId = sanitizeMessage(msgData.userId);
-
-    // Keep original for bot triggers, but apply troll transforms if any
-    const originalContent = safeContent;
-    const transformedContent = applyTrollTransform(safeUserId, originalContent);
-
-    const message = {
-      id: crypto.randomUUID(),
-      channelId: safeChannelId,
-      userId: safeUserId,
-      username: safeUsername,
-      avatar: safeAvatar,
-      content: transformedContent,
-      timestamp: new Date().toISOString(),
-      isSystem: false,
-    };
-
-    // Log when a message was transformed by troll-mode for easier debugging
-    if (originalContent !== transformedContent) {
-      logger.info(
-        `TROLL TRANSFORM applied for user=${safeUserId} mode=${trolledUsers.get(safeUserId)} channel=${safeChannelId}`
-      );
-    }
-
-    // Emitir a todos en el canal inmediatamente to reduce perceived latency
-    try {
-      // Build outgoing payload mapping to client fields and include localId if provided by client
-      const outgoing = {
-        id: message.id,
-        channelId: message.channelId,
-        userId: message.userId,
-        username: message.username,
-        avatar: message.avatar,
-        content: message.content,
-        timestamp: message.timestamp,
-        isSystem: !!message.isSystem,
-        localId: msgData && msgData.localId ? msgData.localId : null,
-      };
-      // Emit to everyone in the channel except the sender, then emit to sender once.
-      try {
-        socket.to(message.channelId).emit('message:received', outgoing);
-        socket.emit('message:received', outgoing);
-      } catch (e) {
-        logger.debug('Error emitiendo mensaje recibido:', e);
-      }
-      // Send acknowledgement to sender if provided
-      if (ack && typeof ack === 'function') {
-        try {
-          ack({
-            ok: true,
-            id: message.id,
-            timestamp: message.timestamp,
-            localId: outgoing.localId,
-          });
-        } catch (e) {}
-      }
-    } catch (e) {
-      logger.debug('Error emitiendo mensaje recibido:', e);
-      if (ack && typeof ack === 'function') {
-        try {
-          ack({ ok: false, error: 'emit_error' });
-        } catch (e) {}
-      }
-    }
-
-    // Persistir en DB de forma asíncrona (no bloquear el main loop)
-    setImmediate(async () => {
-      try {
-        await db.saveMessage(message);
-      } catch (err) {
-        logger.error('Error guardando mensaje en DB (async):', err);
-      }
-    });
-
-    // 🤖 Lógica del Bot (Respuestas Agresivas)
-    if (originalContent.toLowerCase().includes('@upg')) {
-      const text = originalContent.toLowerCase();
-      let botResponse = '';
-
-      // Respuestas agresivas según palabras clave
-      if (text.includes('hola') || text.includes('hey') || text.includes('buenas')) {
-        const greetings = [
-          '¿Qué pasa, maricón? ¿Ya te preparaste para que te destroce?',
-          'Hola subnormal, ¿vienes a perder otra vez?',
-          '¿Buenas? Las tendrás cuando aprendas a jugar, pringado',
-          'Ey, otra vez tú... menuda pesadilla',
-          '¿Qué hay, payaso? ¿Listo para hacer el ridículo?',
-        ];
-        botResponse = greetings[Math.floor(Math.random() * greetings.length)];
-      } else if (
-        text.includes('como estas') ||
-        text.includes('que tal') ||
-        text.includes('todo bien')
-      ) {
-        const statusReplies = [
-          'Mejor que tú seguro, capullo',
-          'De puta madre esperando a que alguien me dé competencia de verdad',
-          'Bien, pero tú me caes como una patada en los huevos',
-          'Aquí, aburrido de ver cómo juegas como el culo',
-          'Todo perfecto hasta que apareciste tú, subnormal',
-        ];
-        botResponse = statusReplies[Math.floor(Math.random() * statusReplies.length)];
-      } else if (text.includes('ayuda') || text.includes('help') || text.includes('comandos')) {
-        const helpReplies = [
-          '¿Ayuda? Lo que necesitas es aprender a jugar, pringado',
-          'No hay comandos para dejar de ser un inútil, maricón',
-          'La única ayuda que necesitas es un tutorial para no ser tan malo',
-          'Ayuda: deja de joder y ponte a entrenar, subnormal',
-        ];
-        botResponse = helpReplies[Math.floor(Math.random() * helpReplies.length)];
-      } else if (text.includes('gracias') || text.includes('thanks')) {
-        const thanks = [
-          'Sí, sí, lo que tú digas, pesado',
-          'De nada, pero sigues siendo un paquete',
-          'Vale, ahora lárgate',
-          'No me las des, todavía juegas como una mierda',
-        ];
-        botResponse = thanks[Math.floor(Math.random() * thanks.length)];
-      } else if (
-        text.includes('quien sos') ||
-        text.includes('quien eres') ||
-        text.includes('que sos')
-      ) {
-        botResponse = 'Soy UPG, el bot que te va a humillar cada vez que abras la boca, subnormal';
-      } else if (text.includes('callate') || text.includes('cállate') || text.includes('shut')) {
-        const shutupReplies = [
-          '¿Callarme yo? Primero aprende a jugar, capullo',
-          'Tú cállate y deja de llorar, maricón',
-          'Haz el favor de callar tú, que das vergüenza ajena',
-          'Cierra el pico, pringado',
-        ];
-        botResponse = shutupReplies[Math.floor(Math.random() * shutupReplies.length)];
-      } else if (text.includes('jugar') || text.includes('partida') || text.includes('game')) {
-        const gameReplies = [
-          '¿Jugar? ¿Contigo? Prefiero ver paint secarse',
-          'Vale, pero prepárate para que te haga llorar, subnormal',
-          'Juega solo, que conmigo vas a sufrir',
-          'Una partida para humillarte, me apunto',
-        ];
-        botResponse = gameReplies[Math.floor(Math.random() * gameReplies.length)];
-      } else {
-        // Respuestas genéricas agresivas
-        const genericReplies = [
-          '¿Qué coño quieres ahora, pesado?',
-          'Déjame en paz, maricón',
-          'Otra vez con tus gilipolleces...',
-          '¿No tienes nada mejor que hacer, subnormal?',
-          'Vete a la mierda, anda',
-          'Me tienes hasta los huevos',
-          'Qué puto coñazo eres',
-          'Eres más pesado que una piedra en el zapato',
-          'Joder, qué plasta',
-        ];
-        botResponse = genericReplies[Math.floor(Math.random() * genericReplies.length)];
-      }
-
-      // Crear mensaje del bot
-      const botMessage = {
-        id: crypto.randomUUID(),
-        channelId: message.channelId,
-        userId: 'bot',
-        username: 'UPG',
-        avatar: BOT_USER.avatar,
-        content: botResponse,
-        timestamp: new Date().toISOString(),
-        isSystem: false,
-        role: 'bot',
-      };
-
-      // Simular tiempo de escritura
-      setTimeout(async () => {
-        try {
-          await db.saveMessage(botMessage);
-          console.log('SERVIDOR: Enviando respuesta del bot:', botResponse);
-          // Emit bot message to all clients in the channel (except sender via socket.to, then emit to sender once)
-          try {
-            socket
-              .to(message.channelId)
-              .emit('message:received', db.sanitizeMessageOutput(botMessage));
-            socket.emit('message:received', db.sanitizeMessageOutput(botMessage));
-          } catch (innerErr) {
-            logger.debug(
-              'No se pudo emitir respuesta del bot directamente al socket remitente:',
-              innerErr
-            );
-          }
-          console.log('SERVIDOR: Mensaje del bot enviado al canal', message.channelId);
-        } catch (err) {
-          logger.error('Error guardando mensaje del bot:', err);
-        }
-      }, 1000); // Reducido a 1 segundo para testing
-    }
-  });
-
-  // Usuario actualiza su perfil (nombre/color)
-  socket.on('user:update', async data => {
-    try {
-      const user = connectedUsers.get(socket.id);
-      if (!user) return;
-      // Allow updating limited fields only
-      const safeName =
-        typeof data.username === 'string'
-          ? sanitizeMessage(data.username.substring(0, 50))
-          : user.username;
-      const safeColor =
-        typeof data.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(data.color)
-          ? data.color
-          : user.color;
-
-      // Update connectedUsers map and DB
-      const updated = { ...user, username: safeName, color: safeColor };
-      connectedUsers.set(socket.id, updated);
-      try {
-        await db.saveUser({
-          id: updated.id,
-          username: updated.username,
-          avatar: updated.avatar,
-          role: updated.role,
-          status: updated.status,
-          color: updated.color,
-        });
-      } catch (e) {
-        logger.debug('Error saving updated user to DB', e);
-      }
-
-      // Broadcast to everyone that the user was updated
-      io.emit('user:updated', db.sanitizeUserOutput(updated));
-      // Emit more specific events for profile and color changes
-      io.emit('user:profile-updated', db.sanitizeUserOutput(updated));
-      if (updated.color && updated.color !== user.color) {
-        io.emit('user:color-changed', { userId: updated.id, color: updated.color });
-        // Legacy event for older clients
-        io.emit('admin:user-color-changed', { userId: updated.id, color: updated.color });
-      }
-    } catch (err) {
-      logger.error('Error handling user:update', err);
-    }
-  });
-
-  // ✅ Canales de Voz
-  socket.on('voice:join', ({ channelId }) => {
-    logger.info(`Intento de unirse a voz: ${socket.id} -> ${channelId}`);
-    const user = connectedUsers.get(socket.id);
-    if (!user) {
-      logger.warn(`Usuario no encontrado en connectedUsers para socket ${socket.id}`);
-      return;
-    }
-
-    const currentChannel = voiceStates.get(user.id);
-    logger.debug(
-      `Usuario ${user.username} (${user.id}) estado actual: ${currentChannel}, nuevo: ${channelId}`
-    );
-
-    if (currentChannel === channelId) {
-      // Si ya está en este canal, salir (toggle)
-      voiceStates.delete(user.id);
-      logger.info(`Usuario ${user.username} salió del canal de voz`);
-      // leave socket.io voice room
-      try {
-        socket.leave(`voice:${currentChannel}`);
-      } catch (e) {
-        logger.debug('Error leaving voice room', e);
-      }
-    } else {
-      // Unirse al nuevo canal
-      voiceStates.set(user.id, channelId);
-      logger.info(`Usuario ${user.username} se unió al canal de voz: ${channelId}`);
-      try {
-        // leave previous
-        if (currentChannel) socket.leave(`voice:${currentChannel}`);
-        socket.join(`voice:${channelId}`);
-      } catch (e) {
-        logger.debug('Error joining voice room', e);
-      }
-    }
-
-    // Emitir estado actualizado a TODOS
-    io.emit('voice:state', Object.fromEntries(voiceStates));
-  });
-
-  // Receive audio chunks from clients and relay to voice room
-  socket.on('voice:chunk', payload => {
-    try {
-      const user = connectedUsers.get(socket.id);
-      if (!user) return;
-      const channelId = voiceStates.get(user.id);
-      if (!channelId) return;
-
-      // Expect payload to contain: buffer (ArrayBuffer), sampleRate
-      const { buffer, sampleRate } = payload;
-      // Calculate simple RMS level on server for monitoring/broadcast
-      try {
-        const float32 = new Float32Array(buffer);
-        let sum = 0;
-        for (let i = 0; i < float32.length; i++) {
-          sum += float32[i] * float32[i];
-        }
-        const rms = Math.sqrt(sum / float32.length);
-        // Throttle level broadcasts per user to at most ~10Hz (100ms)
-        const last = lastLevelBroadcast.get(user.id) || 0;
-        const now = Date.now();
-        if (now - last > 100) {
-          lastLevelBroadcast.set(user.id, now);
-          io.to(`voice:${channelId}`).emit('voice:level', { userId: user.id, level: rms });
-        }
-      } catch (e) {
-        logger.debug('Error computing RMS on server', e);
-      }
-
-      // Relay audio buffer to others in same voice room
-      socket
-        .to(`voice:${channelId}`)
-        .emit('voice:chunk', { fromUserId: user.id, buffer, sampleRate });
-    } catch (err) {
-      logger.error('Error handling voice chunk', err);
-    }
-  });
-
-  // ✅ Desconexión
-  socket.on('disconnect', () => {
-    const user = connectedUsers.get(socket.id);
-    if (user) {
-      connectedUsers.delete(socket.id);
-      io.emit('user:offline', { userId: user.id, username: user.username }); // No hay datos sensibles aquí
-
-      // Limpiar estado de voz si estaba conectado
-      if (voiceStates.has(user.id)) {
-        voiceStates.delete(user.id);
-        io.emit('voice:state', Object.fromEntries(voiceStates));
-      }
-
-      // Actualizar estado en DB
-      if (!user.id.startsWith('guest-')) {
-        db.saveUser({ ...user, status: 'offline' });
-      }
-    }
-  });
-
-  // ✅ WebRTC signaling relay for voice
-  socket.on('voice:signal', ({ toUserId, data }) => {
-    try {
-      const fromUser = connectedUsers.get(socket.id);
-      if (!fromUser) return;
-      // Buscar socketId del destinatario
-      for (const [sid, u] of connectedUsers.entries()) {
-        if (u.id === toUserId) {
-          const targetSocket = io.sockets.sockets.get(sid);
-          if (targetSocket) {
-            targetSocket.emit('voice:signal', { fromUserId: fromUser.id, data });
-          }
-          break;
-        }
-      }
-    } catch (err) {
-      logger.error('Error relaying voice signal', err);
-    }
-  });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  logger.info(`Servidor corriendo en puerto ${PORT}`);
-  logger.info(`Admin ID configurado: ${ADMIN_DISCORD_ID}`);
+// ===============================================
+// Inicialización y Configuración
+// ===============================================
+
+// Mostrar configuración cargada (sin secretos)
+logger.info('Configuración del servidor:', {
+  env: process.env.NODE_ENV || 'development',
+  port: process.env.PORT || 3000,
+  logLevel: process.env.LOG_LEVEL || 'info',
+  dbConnected: db.isConnected() ? 'sí' : 'no',
+  adminDiscordId: ADMIN_DISCORD_ID.slice(0, 6) + '...', // Mostrar solo parte del ID
 });
 
-// === Console commands for admin control ===
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' });
-rl.on('line', input => {
-  const line = String(input || '').trim();
-  if (!line) {
-    rl.prompt();
-    return;
+// Iniciar servidor HTTP
+server.listen(process.env.PORT || 3000, () => {
+  logger.info(`Servidor escuchando en puerto ${process.env.PORT || 3000}`);
+});
+
+// Tareas de mantenimiento periódicas
+setInterval(() => {
+  try {
+    // Limpiar usuarios desconectados de connectedUsers (timeout de 5 minutos)
+    const now = Date.now();
+    for (const [sid, user] of connectedUsers.entries()) {
+      if (!user.id.startsWith('guest-') && now - user.lastActivity > 5 * 60 * 1000) {
+        // Desconectar socket inactivo
+        const s = io.sockets.sockets.get(sid);
+        if (s) {
+          s.disconnect(true);
+        }
+      }
+    }
+  } catch (e) {
+    logger.error('Error en tarea de mantenimiento', e);
   }
-  if (line === 'admin on' || line === 'admin enable') {
-    adminPasswordUnlocked = true;
-    logger.info('Admin unlocked via console command');
-    console.log('Admin unlocked');
-  } else if (line === 'admin off' || line === 'admin disable') {
-    adminPasswordUnlocked = false;
-    logger.info('Admin locked via console command');
-    console.log('Admin locked');
-  } else if (line === 'admin status') {
-    console.log('adminPasswordUnlocked =', adminPasswordUnlocked);
-  } else if (line === 'admin gen') {
-    const newpass = crypto.randomBytes(8).toString('hex');
-    setAdminPassword(newpass);
-    logger.info('Admin password regenerated via console command');
-    console.log('New admin password generated:', newpass);
-  } else {
-    console.log('Unknown command:', line);
-    console.log('Available commands: admin on|enable, admin off|disable, admin status, admin gen');
-  }
-  rl.prompt();
+}, 60 * 1000); // Cada minuto
+
+// ===============================================
+// Cierre limpio del servidor
+// ===============================================
+
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM recibido: cerrando servidor...');
+  server.close(err => {
+    if (err) {
+      logger.error('Error cerrando servidor:', err);
+      process.exit(1);
+    }
+    logger.info('Servidor cerrado limpiamente');
+    process.exit(0);
+  });
 });
-rl.prompt();
+
+process.on('uncaughtException', (err) => {
+  logger.error('Excepción no controlada:', err);
+  // Opcional: cerrar el servidor en caso de errores críticos no manejados
+  // server.close(() => process.exit(1));
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Promesa rechazada sin manejar:', promise, 'razón:', reason);
+  // Opcional: cerrar el servidor en caso de rechazos de promesas no manejados
+  // server.close(() => process.exit(1));
+});
