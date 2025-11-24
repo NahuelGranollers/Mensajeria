@@ -245,6 +245,13 @@ module.exports = {
   saveMessage,
   getChannelHistory,
   deleteMessage,
+  isConnected: function() {
+    if (!db) return false;
+    if (type === 'sqlite') {
+      return db.open;
+    }
+    return true;
+  },
   // Protección de datos: eliminar datos sensibles antes de enviar al frontend
   sanitizeUserOutput: function (user) {
     if (!user) return null;
