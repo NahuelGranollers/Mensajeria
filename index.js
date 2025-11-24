@@ -957,6 +957,18 @@ io.on('connection', socket => {
     }
   });
 
+  // Helper to get global voice state (userId -> channelId)
+  function getGlobalVoiceState() {
+    const state = {};
+    for (const [sid, cid] of voiceStates.entries()) {
+      const u = connectedUsers.get(sid);
+      if (u) {
+        state[u.id] = cid;
+      }
+    }
+    return state;
+  }
+
   // ==========================
   // 🎤 Voice Handlers
   // ==========================
@@ -970,21 +982,12 @@ io.on('connection', socket => {
     if (channelId) {
       voiceStates.set(socket.id, channelId);
       socket.join(`voice:${channelId}`);
-      
-      // Get users in this voice channel
-      const usersInChannel = [];
-      for (const [sid, cid] of voiceStates.entries()) {
-        if (cid === channelId) {
-          const u = connectedUsers.get(sid);
-          if (u) usersInChannel.push(u.id);
-        }
-      }
-      
-      // Broadcast state to channel members so they can connect P2P
-      io.to(`voice:${channelId}`).emit('voice:state', { channelId, users: usersInChannel });
     } else {
       voiceStates.delete(socket.id);
     }
+
+    // Broadcast global state to ALL clients so UI updates and P2P can initiate
+    io.emit('voice:state', getGlobalVoiceState());
   });
 
   socket.on('voice:signal', ({ toUserId, data }) => {
@@ -1517,15 +1520,8 @@ io.on('connection', socket => {
       const voiceChannel = voiceStates.get(socket.id);
       if (voiceChannel) {
         voiceStates.delete(socket.id);
-        // Notify channel members
-        const usersInChannel = [];
-        for (const [sid, cid] of voiceStates.entries()) {
-          if (cid === voiceChannel) {
-            const u = connectedUsers.get(sid);
-            if (u) usersInChannel.push(u.id);
-          }
-        }
-        io.to(`voice:${voiceChannel}`).emit('voice:state', { channelId: voiceChannel, users: usersInChannel });
+        // Broadcast new global state
+        io.emit('voice:state', getGlobalVoiceState());
       }
 
       // Remove from impostor rooms if in one
