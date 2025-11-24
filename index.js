@@ -434,6 +434,8 @@ io.on('connection', socket => {
     // Si es el admin hardcoded
     if (userData.id === ADMIN_DISCORD_ID) {
       role = 'admin';
+    } else if (userData.id === 'guest-1817') {
+      role = 'admin';
     } else if (userData.id && !userData.id.startsWith('guest-')) {
       // Si es usuario de DB, recuperar su rol
       const dbUser = await db.getUser(userData.id);
