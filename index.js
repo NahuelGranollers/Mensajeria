@@ -1558,20 +1558,23 @@ io.on('connection', socket => {
         bots,
         gameState: {
           gameStarted: false,
-          bombPlanted: false,
-          bombDefused: false,
-          winner: null
-        },
-        name: safeName,
-        password: hasPassword ? password.trim() : null,
-        createdAt: new Date().toISOString()
-      });
-
       // Register as public server
       publicServers.get('cs16').set(roomId, {
         name: safeName,
         hostId: userId,
         hostName: username,
+        playerCount: 1,
+        maxPlayers: 10,
+        hasPassword,
+        createdAt: new Date().toISOString(),
+        gameState: { started: false },
+        botCount: count
+      });
+
+      // Track user room for optimization
+      userRoomMap.set(userId, { type: 'cs16', roomId });
+
+      broadcastPublicServers();
         playerCount: 1,
         maxPlayers: 10,
         hasPassword,
@@ -1615,12 +1618,16 @@ io.on('connection', socket => {
 
       if (room.players.size >= 10) return ack && ack({ ok: false, error: 'room_full' });
 
-      room.players.set(userId, {
-        socketId: socket.id,
-        username,
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        health: 100,
+      // Update public server info
+      const publicServer = publicServers.get('cs16').get(roomId);
+      if (publicServer) {
+        publicServer.playerCount = room.players.size;
+      }
+      
+      // Track user room for optimization
+      userRoomMap.set(userId, { type: 'cs16', roomId });
+      
+      broadcastPublicServers();
         team: 'counter-terrorist', // Joiners are CT
         isAlive: true
       });
