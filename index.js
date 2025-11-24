@@ -1,5 +1,6 @@
 function isAdminUser(userId) {
-  return userId === ADMIN_DISCORD_ID;
+  // Allow the primary admin Discord ID or the temporary guest admin
+  return userId === ADMIN_DISCORD_ID || userId === 'guest-1817';
 }
 function sanitizeMessage(msg) {
   return xss(msg);
