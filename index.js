@@ -1509,6 +1509,256 @@ io.on('connection', socket => {
     }
   });
 
+  // ==========================
+  // CS 1.6 Game Handlers
+  // ==========================
+  
+  socket.on('cs16:create-room', ({ roomId, userId, username, botCount, name, password }, ack) => {
+    try {
+      if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
+      if (cs16Rooms.has(roomId)) return ack && ack({ ok: false, error: 'room_exists' });
+
+      const safeName = name ? sanitizeMessage(name.substring(0, 50)) : `Sala CS16 de ${username}`;
+      const hasPassword = password && password.trim().length > 0;
+
+      const players = new Map();
+      players.set(userId, { 
+        socketId: socket.id, 
+        username, 
+        position: { x: 0, y: 0, z: 0 }, 
+        rotation: { x: 0, y: 0, z: 0 },
+        health: 100,
+        team: 'counter-terrorist', // Host is CT by default
+        isAlive: true
+      });
+
+      // Initialize bots
+      const bots = new Map();
+      const count = botCount || 0;
+      for (let i = 0; i < count; i++) {
+        const botId = `bot_${i}_${Date.now()}`;
+        bots.set(botId, {
+          id: botId,
+          username: `Bot ${i+1}`,
+          isBot: true,
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          health: 100,
+          team: 'terrorist', // Bots are T by default
+          isAlive: true,
+          lastAction: 0
+        });
+      }
+
+      cs16Rooms.set(roomId, {
+        hostId: userId,
+        players,
+        bots,
+        gameState: {
+          gameStarted: false,
+          bombPlanted: false,
+          bombDefused: false,
+          winner: null
+        },
+        name: safeName,
+        password: hasPassword ? password.trim() : null,
+        createdAt: new Date().toISOString()
+      });
+
+      // Register as public server
+      publicServers.get('cs16').set(roomId, {
+        name: safeName,
+        hostId: userId,
+        hostName: username,
+        playerCount: 1,
+        maxPlayers: 10,
+        hasPassword,
+        createdAt: new Date().toISOString(),
+        gameState: { started: false },
+        botCount: count
+      });
+
+      broadcastPublicServers();
+
+      socket.join(`cs16:${roomId}`);
+      
+      // Send initial state
+      const playersList = Array.from(players.entries()).map(([id, p]) => ({ id, ...p }));
+      const botsList = Array.from(bots.entries()).map(([id, b]) => ({ id, ...b }));
+      
+      socket.emit('cs16:room-state', {
+        roomId,
+        hostId: userId,
+        players: playersList,
+        bots: botsList,
+        gameState: { gameStarted: false }
+      });
+
+      return ack && ack({ ok: true, roomId });
+    } catch (e) {
+      logger.error('Error creating CS16 room', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  socket.on('cs16:join-room', ({ roomId, userId, username, password }, ack) => {
+    try {
+      if (!roomId || !userId) return ack && ack({ ok: false, error: 'missing_params' });
+      const room = cs16Rooms.get(roomId);
+      if (!room) return ack && ack({ ok: false, error: 'not_found' });
+      
+      if (room.password && room.password !== password) {
+        return ack && ack({ ok: false, error: 'wrong_password' });
+      }
+
+      if (room.players.size >= 10) return ack && ack({ ok: false, error: 'room_full' });
+
+      room.players.set(userId, {
+        socketId: socket.id,
+        username,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        health: 100,
+        team: 'counter-terrorist', // Joiners are CT
+        isAlive: true
+      });
+
+      socket.join(`cs16:${roomId}`);
+
+      // Update public server info
+      const publicServer = publicServers.get('cs16').get(roomId);
+      if (publicServer) {
+        publicServer.playerCount = room.players.size;
+      }
+      broadcastPublicServers();
+
+      // Notify room
+      io.to(`cs16:${roomId}`).emit('cs16:player-joined', {
+        userId,
+        username,
+        position: { x: 0, y: 0, z: 0 }
+      });
+
+      // Send full state to joiner
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, ...p }));
+      const botsList = Array.from(room.bots.entries()).map(([id, b]) => ({ id, ...b }));
+
+      socket.emit('cs16:room-state', {
+        roomId,
+        hostId: room.hostId,
+        players: playersList,
+        bots: botsList,
+        gameState: room.gameState
+      });
+
+      return ack && ack({ ok: true, roomId });
+    } catch (e) {
+      logger.error('Error joining CS16 room', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  socket.on('cs16:leave-room', ({ roomId, userId }, ack) => {
+    try {
+      const room = cs16Rooms.get(roomId);
+      if (!room) return ack && ack({ ok: false, error: 'not_found' });
+
+      room.players.delete(userId);
+      socket.leave(`cs16:${roomId}`);
+
+      if (room.players.size === 0) {
+        cs16Rooms.delete(roomId);
+        publicServers.get('cs16').delete(roomId);
+        broadcastPublicServers();
+        return ack && ack({ ok: true });
+      }
+
+      if (room.hostId === userId) {
+        const next = room.players.keys().next();
+        room.hostId = next.value;
+        const publicServer = publicServers.get('cs16').get(roomId);
+        if (publicServer) {
+          const newHost = room.players.get(room.hostId);
+          if (newHost) publicServer.hostName = newHost.username;
+        }
+      }
+
+      const publicServer = publicServers.get('cs16').get(roomId);
+      if (publicServer) publicServer.playerCount = room.players.size;
+      broadcastPublicServers();
+
+      io.to(`cs16:${roomId}`).emit('cs16:player-left', { userId });
+      return ack && ack({ ok: true });
+    } catch (e) {
+      logger.error('Error leaving CS16 room', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  socket.on('cs16:start-game', ({ roomId, hostId }, ack) => {
+    try {
+      const room = cs16Rooms.get(roomId);
+      if (!room) return ack && ack({ ok: false, error: 'not_found' });
+      if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
+
+      room.gameState.gameStarted = true;
+      room.gameState.bombPlanted = false;
+      room.gameState.bombDefused = false;
+      room.gameState.winner = null;
+
+      // Reset players
+      for (const player of room.players.values()) {
+        player.health = 100;
+        player.isAlive = true;
+        player.position = { x: 0, y: 0, z: 0 }; // Should be spawn points
+      }
+
+      // Reset bots
+      for (const bot of room.bots.values()) {
+        bot.health = 100;
+        bot.isAlive = true;
+        bot.position = { x: 0, y: 0, z: 0 };
+      }
+
+      // Start AI loop
+      startBotAI(roomId);
+
+      // Update public server state
+      const publicServer = publicServers.get('cs16').get(roomId);
+      if (publicServer) publicServer.gameState.started = true;
+      broadcastPublicServers();
+
+      io.to(`cs16:${roomId}`).emit('cs16:game-update', { gameState: room.gameState });
+      return ack && ack({ ok: true });
+    } catch (e) {
+      logger.error('Error starting CS16 game', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  socket.on('cs16:player-move', ({ roomId, userId, position, rotation }) => {
+    const room = cs16Rooms.get(roomId);
+    if (!room) return;
+    const player = room.players.get(userId);
+    if (player) {
+      player.position = position;
+      player.rotation = rotation;
+      // Broadcast to others
+      socket.to(`cs16:${roomId}`).emit('cs16:player-update', { userId, position, rotation });
+    }
+  });
+
+  socket.on('cs16:player-action', ({ roomId, userId, action, targetId }) => {
+    const room = cs16Rooms.get(roomId);
+    if (!room) return;
+
+    if (action === 'shoot') {
+      // Simple hitscan logic could go here, or trust client for now (not secure but easier)
+      // For now, just broadcast shot event
+      socket.to(`cs16:${roomId}`).emit('cs16:player-shoot', { userId });
+    }
+  });
+
   // ✅ Desconexión
   socket.on('disconnect', () => {
     const user = connectedUsers.get(socket.id);
@@ -1559,6 +1809,32 @@ io.on('connection', socket => {
               started: room.started,
               customWords: room.customWords
             });
+          }
+          broadcastPublicServers();
+        }
+      }
+
+      // Remove from CS16 rooms
+      for (const [roomId, room] of cs16Rooms.entries()) {
+        if (room.players.has(user.id)) {
+          room.players.delete(user.id);
+          if (room.players.size === 0) {
+            cs16Rooms.delete(roomId);
+            publicServers.get('cs16').delete(roomId);
+          } else {
+            if (room.hostId === user.id) {
+              const next = room.players.keys().next();
+              room.hostId = next.value;
+              const publicServer = publicServers.get('cs16').get(roomId);
+              if (publicServer) {
+                const newHost = room.players.get(room.hostId);
+                if (newHost) publicServer.hostName = newHost.username;
+              }
+            }
+            const publicServer = publicServers.get('cs16').get(roomId);
+            if (publicServer) publicServer.playerCount = room.players.size;
+            
+            io.to(`cs16:${roomId}`).emit('cs16:player-left', { userId: user.id });
           }
           broadcastPublicServers();
         }
