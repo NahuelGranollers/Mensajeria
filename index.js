@@ -627,27 +627,43 @@ app.post('/auth/logout', (req, res) => {
 // Get public server list
 app.get('/api/servers', (req, res) => {
   try {
-    const servers = {};
-    for (const [gameType, gameServers] of publicServers.entries()) {
-      servers[gameType] = Array.from(gameServers.values()).map(server => ({
-        roomId: server.roomId || Object.keys(gameServers).find(key => gameServers.get(key) === server),
-        name: server.name,
-        hostId: server.hostId,
-        hostName: server.hostName,
-        playerCount: server.playerCount,
-        maxPlayers: server.maxPlayers,
-        hasPassword: server.hasPassword,
-        createdAt: server.createdAt,
-        gameState: server.gameState,
-        botCount: server.botCount || 0
-      }));
-    }
+    const servers = buildPublicServersSnapshot();
     res.json({ servers });
   } catch (e) {
     logger.error('Error getting server list', e);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Build a snapshot of public servers to send via API or sockets
+function buildPublicServersSnapshot() {
+  const servers = {};
+  for (const [gameType, gameServers] of publicServers.entries()) {
+    servers[gameType] = Array.from(gameServers.entries()).map(([roomId, server]) => ({
+      roomId: roomId,
+      name: server.name,
+      hostId: server.hostId,
+      hostName: server.hostName,
+      playerCount: server.playerCount,
+      maxPlayers: server.maxPlayers,
+      hasPassword: server.hasPassword,
+      createdAt: server.createdAt,
+      gameState: server.gameState,
+      botCount: server.botCount || 0
+    }));
+  }
+  return servers;
+}
+
+// Utility to broadcast current servers to all connected clients
+function broadcastPublicServers() {
+  try {
+    const snapshot = buildPublicServersSnapshot();
+    io.emit('servers:updated', { servers: snapshot });
+  } catch (e) {
+    logger.debug('Error broadcasting public servers', e);
+  }
+}
 
 // ===============================================
 // 🔌 Socket.IO Logic
@@ -993,6 +1009,9 @@ io.on('connection', socket => {
         gameState: { started: false }
       });
 
+      // Broadcast updated server list so all clients see the new room
+      broadcastPublicServers();
+
       socket.join(`impostor:${roomId}`);
       socket.emit('impostor:room-state', {
         roomId,
@@ -1032,6 +1051,9 @@ io.on('connection', socket => {
         publicServer.playerCount = room.players.size;
       }
 
+      // Broadcast updated server list so everyone sees the new player count
+      broadcastPublicServers();
+
       // Notify all in room of updated players
       const playersList = Array.from(room.players.entries()).map(([id, p]) => ({
         id,
@@ -1065,6 +1087,8 @@ io.on('connection', socket => {
       if (room.players.size === 0) {
         impostorRooms.delete(roomId);
         publicServers.get('impostor').delete(roomId);
+        // Broadcast removal
+        broadcastPublicServers();
         return ack && ack({ ok: true });
       }
       // If host left, pick a new host
@@ -1084,6 +1108,9 @@ io.on('connection', socket => {
           publicServer.hostName = newHost.username;
         }
       }
+
+      // Broadcast updated server list (player counts, host changes)
+      broadcastPublicServers();
 
       // Emit player left message
       if (leavingPlayer) {
@@ -1473,6 +1500,9 @@ io.on('connection', socket => {
         botCount
       });
 
+      // Broadcast updated server list so all clients see the new CS16 room
+      broadcastPublicServers();
+
       socket.join(`cs16:${roomId}`);
 
       // Combine players and bots for room state
@@ -1539,6 +1569,9 @@ io.on('connection', socket => {
         publicServer.playerCount = room.players.size;
       }
 
+      // Broadcast updated server list so everyone sees the new player count
+      broadcastPublicServers();
+
       // Notify all in room of updated players
       const allParticipants = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
       io.to(`cs16:${roomId}`).emit('cs16:room-state', {
@@ -1578,6 +1611,8 @@ io.on('connection', socket => {
       if (room.players.size === 0) {
         cs16Rooms.delete(roomId);
         publicServers.get('cs16').delete(roomId);
+        // Broadcast removal of CS16 room
+        broadcastPublicServers();
         return ack && ack({ ok: true });
       }
 
@@ -1603,6 +1638,9 @@ io.on('connection', socket => {
       if (publicServer) {
         publicServer.playerCount = room.players.size;
       }
+
+      // Broadcast updated server list so everyone sees the change
+      broadcastPublicServers();
 
       // Emit updated room state
       const allParticipants = [...Array.from(room.players.entries()), ...Array.from(room.bots.entries())];
