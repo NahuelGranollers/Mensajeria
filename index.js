@@ -893,9 +893,15 @@ io.on('connection', socket => {
       room.impostorId = null;
       room.voting = false;
       room.votes = new Map();
+      room.revealedInnocents = new Set(); // Clear revealed innocents
 
       // Notify clients and allow host to start a new round
       io.to(`impostor:${roomId}`).emit('impostor:restarted', { roomId });
+
+      // Emit updated room state to clear revealed innocents
+      const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, username: p.username, revealedInnocent: false }));
+      io.to(`impostor:${roomId}`).emit('impostor:room-state', { roomId, hostId: room.hostId, players: playersList, started: room.started, customWords: room.customWords });
+
       return ack && ack({ ok: true });
     } catch (e) {
       logger.error('Error restarting round', e);
