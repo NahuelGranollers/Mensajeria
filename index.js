@@ -6,6 +6,13 @@ function isAdminUser(userId) {
 }
 
 // Admin password storage and verification (local, file-based).
+// Core node modules needed early
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const winston = require('winston');
+const readline = require('readline');
+
 const ADMIN_PASSWORD_FILE = path.join(__dirname, 'admin-secret.json');
 
 function setAdminPassword(plain) {
@@ -43,17 +50,12 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const compression = require('compression');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
 const axios = require('axios');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const xss = require('xss');
-const winston = require('winston');
-const readline = require('readline');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
