@@ -846,9 +846,11 @@ io.on('connection', socket => {
       // If unique top, that player was nominated. Do NOT remove them from the room immediately.
       // Instead, reveal whether they were the impostor. If they WERE the impostor, end the round.
       let eliminated = null;
+      let eliminatedName = null;
       let wasImpostor = false;
       if (top) {
         eliminated = top;
+        eliminatedName = room.players.get(top)?.username || top;
         wasImpostor = room.impostorId && top === room.impostorId;
 
         if (wasImpostor) {
@@ -867,13 +869,13 @@ io.on('connection', socket => {
       }
 
       // send voting results including whether the eliminated was impostor
-      io.to(`impostor:${roomId}`).emit('impostor:voting-result', { roomId, counts, eliminated, wasImpostor });
+      io.to(`impostor:${roomId}`).emit('impostor:voting-result', { roomId, counts, eliminated: eliminatedName, wasImpostor });
 
       // broadcast updated room state (include revealed flags)
       const playersList = Array.from(room.players.entries()).map(([id, p]) => ({ id, username: p.username, revealedInnocent: room.revealedInnocents ? room.revealedInnocents.has(id) : false }));
       io.to(`impostor:${roomId}`).emit('impostor:room-state', { roomId, hostId: room.hostId, players: playersList, started: room.started, customWords: room.customWords });
 
-      return ack && ack({ ok: true, eliminated, wasImpostor });
+      return ack && ack({ ok: true, eliminated: eliminatedName, wasImpostor });
     } catch (e) {
       logger.error('Error ending voting', e);
       return ack && ack({ ok: false, error: 'internal' });
