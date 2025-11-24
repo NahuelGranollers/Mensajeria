@@ -891,6 +891,124 @@ io.on('connection', socket => {
   });
 
   // ==========================
+  // 💬 Chat Handlers
+  // ==========================
+  socket.on('message:send', async (data, ack) => {
+    try {
+      const { channelId, content, userId, username, avatar, localId } = data;
+      if (!content || !content.trim()) return ack && ack({ ok: false, error: 'empty_message' });
+
+      // Rate limit check
+      const now = Date.now();
+      if (now - lastMessageAt.time < 100) {
+        // Simple global throttle per socket if needed
+      }
+      lastMessageAt.time = now;
+
+      let finalContent = sanitizeMessage(content.trim());
+      
+      // Apply troll transforms
+      finalContent = applyTrollTransform(userId, finalContent);
+
+      const messageId = crypto.randomUUID();
+      const timestamp = new Date().toISOString();
+
+      const messageData = {
+        id: messageId,
+        channelId,
+        userId,
+        username,
+        avatar,
+        content: finalContent,
+        timestamp,
+        isSystem: false,
+        localId // Pass back for optimistic UI reconciliation
+      };
+
+      // Save to DB
+      await db.saveMessage(messageData);
+
+      // Broadcast to channel
+      io.to(channelId).emit('message:received', messageData);
+
+      // Bot commands
+      if (finalContent.startsWith('/')) {
+        // Simple bot response for testing
+        if (finalContent === '/ping') {
+           const botMsg = {
+             id: crypto.randomUUID(),
+             channelId,
+             userId: 'bot',
+             username: 'UPG Bot',
+             avatar: BOT_USER.avatar,
+             content: 'Pong! 🏓',
+             timestamp: new Date().toISOString(),
+             isSystem: false
+           };
+           await db.saveMessage(botMsg);
+           io.to(channelId).emit('message:received', botMsg);
+        }
+      }
+
+      return ack && ack({ ok: true, messageId });
+    } catch (e) {
+      logger.error('Error sending message', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  // ==========================
+  // 🎤 Voice Handlers
+  // ==========================
+  socket.on('voice:join', ({ channelId }) => {
+    // Leave previous channel if any
+    const previousChannel = voiceStates.get(socket.id);
+    if (previousChannel) {
+      socket.leave(`voice:${previousChannel}`);
+    }
+    
+    if (channelId) {
+      voiceStates.set(socket.id, channelId);
+      socket.join(`voice:${channelId}`);
+      
+      // Get users in this voice channel
+      const usersInChannel = [];
+      for (const [sid, cid] of voiceStates.entries()) {
+        if (cid === channelId) {
+          const u = connectedUsers.get(sid);
+          if (u) usersInChannel.push(u.id);
+        }
+      }
+      
+      // Broadcast state to channel members so they can connect P2P
+      io.to(`voice:${channelId}`).emit('voice:state', { channelId, users: usersInChannel });
+    } else {
+      voiceStates.delete(socket.id);
+    }
+  });
+
+  socket.on('voice:signal', ({ toUserId, data }) => {
+    // Find socket for target user
+    for (const [sid, user] of connectedUsers.entries()) {
+      if (user.id === toUserId) {
+        io.to(sid).emit('voice:signal', { fromUserId: connectedUsers.get(socket.id)?.id, data });
+        break;
+      }
+    }
+  });
+
+  socket.on('voice:chunk', ({ buffer, sampleRate }) => {
+    const channelId = voiceStates.get(socket.id);
+    if (!channelId) return;
+    
+    const userId = connectedUsers.get(socket.id)?.id;
+    if (!userId) return;
+
+    // Relay to others in channel (excluding sender)
+    socket.to(`voice:${channelId}`).emit('voice:chunk', { fromUserId: userId, buffer, sampleRate });
+  });
+
+  // ==========================
   // Impostor Game Handlers
   // ==========================
   // Create a room and become host
@@ -1086,6 +1204,44 @@ io.on('connection', socket => {
       return ack && ack({ ok: true });
     } catch (e) {
       logger.error('Error adding word to impostor room', e);
+      return ack && ack({ ok: false, error: 'internal' });
+    }
+  });
+
+  // Impostor attempts to guess the word
+  socket.on('impostor:guess-word', ({ roomId, userId, guess }, ack) => {
+    try {
+      const room = impostorRooms.get(roomId);
+      if (!room) return ack && ack({ ok: false, error: 'not_found' });
+      if (!room.started) return ack && ack({ ok: false, error: 'not_started' });
+      if (room.impostorId !== userId) return ack && ack({ ok: false, error: 'not_impostor' });
+      
+      const correctWord = room.word;
+      const safeGuess = guess.trim().toLowerCase();
+      const safeWord = correctWord.trim().toLowerCase();
+      
+      // Check similarity (exact match for now)
+      if (safeGuess === safeWord) {
+        // Impostor wins!
+        room.started = false;
+        io.to(`impostor:${roomId}`).emit('impostor:game-over', { 
+          winner: 'impostor', 
+          word: correctWord,
+          impostorName: room.players.get(userId)?.username 
+        });
+      } else {
+        // Impostor loses (Crewmates win)
+        room.started = false;
+        io.to(`impostor:${roomId}`).emit('impostor:game-over', { 
+          winner: 'crewmates', 
+          word: correctWord,
+          guess: guess,
+          impostorName: room.players.get(userId)?.username 
+        });
+      }
+      return ack && ack({ ok: true });
+    } catch (e) {
+      logger.error('Error guessing word', e);
       return ack && ack({ ok: false, error: 'internal' });
     }
   });
