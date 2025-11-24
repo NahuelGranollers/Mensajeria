@@ -77,22 +77,22 @@ async function createTables() {
     if (type === 'sqlite') {
       queries.forEach(query => db.exec(query));
       console.log('✅ [DB] Tablas SQLite verificadas/creadas.');
-          // Ensure color column exists (migration)
-          try {
-            const cols = db.prepare("PRAGMA table_info('users')").all();
-            const hasColor = cols.some(c => c.name === 'color');
-            const hasScore = cols.some(c => c.name === 'score');
-            if (!hasColor) {
-              db.exec("ALTER TABLE users ADD COLUMN color TEXT DEFAULT '#5865F2'");
-              console.log('✅ [DB] Columna color añadida a users (migración)');
-            }
-            if (!hasScore) {
-              db.exec("ALTER TABLE users ADD COLUMN score INTEGER DEFAULT 0");
-              console.log('✅ [DB] Columna score añadida a users (migración)');
-            }
-          } catch (merr) {
-            console.warn('No se pudo verificar/añadir columna color:', merr);
-          }
+      // Ensure color column exists (migration)
+      try {
+        const cols = db.prepare("PRAGMA table_info('users')").all();
+        const hasColor = cols.some(c => c.name === 'color');
+        const hasScore = cols.some(c => c.name === 'score');
+        if (!hasColor) {
+          db.exec("ALTER TABLE users ADD COLUMN color TEXT DEFAULT '#5865F2'");
+          console.log('✅ [DB] Columna color añadida a users (migración)');
+        }
+        if (!hasScore) {
+          db.exec('ALTER TABLE users ADD COLUMN score INTEGER DEFAULT 0');
+          console.log('✅ [DB] Columna score añadida a users (migración)');
+        }
+      } catch (merr) {
+        console.warn('No se pudo verificar/añadir columna color:', merr);
+      }
     } else {
       const client = await db.connect();
       try {
@@ -112,13 +112,15 @@ async function createTables() {
           await client.query(pgQuery);
         }
         console.log('✅ [DB] Tablas PostgreSQL verificadas/creadas.');
-          // Ensure color column exists in Postgres
-          try {
-            await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#5865F2'`);
-           await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 0`);
-          } catch (merr) {
-            console.warn('No se pudo verificar/añadir columna color en Postgres:', merr);
-          }
+        // Ensure color column exists in Postgres
+        try {
+          await client.query(
+            `ALTER TABLE users ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#5865F2'`
+          );
+          await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 0`);
+        } catch (merr) {
+          console.warn('No se pudo verificar/añadir columna color en Postgres:', merr);
+        }
       } finally {
         client.release();
       }
@@ -248,7 +250,16 @@ module.exports = {
     if (!user) return null;
     // Nunca exponer datos internos, solo los necesarios
     const { id, username, avatar, role, status, last_seen, color, score } = user;
-    return { id, username, avatar, role, status, color: color || '#5865F2', score: score || 0, lastSeen: last_seen };
+    return {
+      id,
+      username,
+      avatar,
+      role,
+      status,
+      color: color || '#5865F2',
+      score: score || 0,
+      lastSeen: last_seen,
+    };
   },
   sanitizeMessageOutput: function (msg) {
     if (!msg) return null;
@@ -295,7 +306,7 @@ module.exports = {
     if (type === 'sqlite') {
       db.prepare('DELETE FROM users WHERE id != ?').run('bot');
     } else {
-      await db.query("DELETE FROM users WHERE id != $1", ['bot']);
+      await db.query('DELETE FROM users WHERE id != $1', ['bot']);
     }
   },
   // Migración de datos (stub)
