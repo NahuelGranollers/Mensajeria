@@ -1305,8 +1305,12 @@ io.on('connection', socket => {
   // Host starts a round: pick word and assign one impostor
   socket.on('impostor:start', ({ roomId, hostId, category, timerDuration }, ack) => {
     try {
+      logger.info(`impostor:start - roomId: ${roomId}, hostId: ${hostId}, rooms exist: ${impostorRooms.size}`);
       const room = impostorRooms.get(roomId);
-      if (!room) return ack && ack({ ok: false, error: 'not_found' });
+      if (!room) {
+        logger.warn(`Room ${roomId} not found. Available rooms: ${Array.from(impostorRooms.keys()).join(', ')}`);
+        return ack && ack({ ok: false, error: 'not_found' });
+      }
       if (room.hostId !== hostId) return ack && ack({ ok: false, error: 'not_host' });
       if (room.started) return ack && ack({ ok: false, error: 'already_started' });
 
