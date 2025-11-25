@@ -4,7 +4,9 @@
   "description": "UPG Community Hub - Backend Server",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js",
+    "check": "node check-setup.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

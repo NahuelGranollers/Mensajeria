@@ -2,6 +2,24 @@
 
 Backend server para UPG Community Hub con Socket.IO y Discord OAuth2.
 
+## 📁 Estructura del Servidor
+
+```
+server/
+├── index.js              # Archivo principal del servidor
+├── db.js                 # Gestión de base de datos (SQLite/PostgreSQL)
+├── package.json          # Dependencias del proyecto
+├── .env.example          # Plantilla de variables de entorno
+├── .gitignore            # Archivos a ignorar en git
+├── README.md             # Este archivo
+├── admin-secret.json     # Contraseña hasheada del admin (generada automáticamente)
+├── database.sqlite       # Base de datos SQLite (desarrollo)
+├── database.sqlite-shm   # Shared memory (SQLite)
+└── database.sqlite-wal   # Write-ahead log (SQLite)
+```
+
+**Nota:** Los archivos `.env`, `database.sqlite*`, `admin-secret.json`, `users.json` y `banned.json` se generan automáticamente y NO deben incluirse en el control de versiones.
+
 ## 🚀 Deployment en Render
 
 ### 1. Configuración Inicial
@@ -13,6 +31,9 @@ Backend server para UPG Community Hub con Socket.IO y Discord OAuth2.
    - **Build Command**: `npm install`
    - **Start Command**: `npm start`
    - **Environment**: Node
+   - **Node Version**: 18.x o superior
+
+**Importante:** Render debe apuntar a la carpeta `/server` del repositorio, donde están todos los archivos del backend.
 
 ### 2. Variables de Entorno en Render
 
@@ -43,15 +64,40 @@ Asegúrate de que el redirect URI esté configurado en Discord:
 ```bash
 cd server
 npm install
+```
+
+### Configurar Variables de Entorno
+
+1. Copia el archivo de ejemplo:
+```bash
+cp .env.example .env
+```
+
+2. Edita `.env` con tus valores reales:
+```env
+DISCORD_CLIENT_ID=tu_client_id
+DISCORD_CLIENT_SECRET=tu_client_secret
+DISCORD_REDIRECT_URI=http://localhost:3000/auth/callback
+FRONTEND_URL=http://localhost:5173
+SESSION_SECRET=tu_clave_secreta_aqui
+NODE_ENV=development
+PORT=3000
+GEMINI_API_KEY=tu_api_key_de_gemini
+```
+
+3. Verifica que todo esté configurado:
+```bash
+npm run check
+```
+
+4. Inicia el servidor:
+```bash
 npm start
 ```
 
-Para desarrollo local, modifica `.env`:
-
-```
-DISCORD_REDIRECT_URI=http://localhost:3000/auth/callback
-FRONTEND_URL=http://localhost:5173
-NODE_ENV=development
+Para desarrollo con auto-reload:
+```bash
+npm run dev
 ```
 
 ## 🔒 Seguridad
