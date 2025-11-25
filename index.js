@@ -558,6 +558,42 @@ app.get('/api/servers', (req, res) => {
   }
 });
 
+// Get news
+app.get('/api/news', catchAsync(async (req, res) => {
+  const news = await db.getNews();
+  res.json(news);
+}));
+
+// Create news
+app.post('/api/news', catchAsync(async (req, res) => {
+  const { title, content, excerpt, category } = req.body;
+  const user = req.session.discordUser;
+  
+  if (!user) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  // Check if admin or verified (simple check for now, ideally check DB role)
+  if (user.role !== 'admin' && !user.verified) {
+     // Allow for now if verified check is complex, or restrict to admin
+     if (user.id !== ADMIN_DISCORD_ID) {
+        return res.status(403).json({ ok: false, error: 'Forbidden' });
+     }
+  }
+
+  if (!title || !content) return res.status(400).json({ ok: false, error: 'Missing fields' });
+
+  const newsItem = {
+    id: crypto.randomUUID(),
+    title: sanitizeMessage(title),
+    content: sanitizeMessage(content),
+    excerpt: excerpt ? sanitizeMessage(excerpt) : null,
+    authorId: user.id,
+    authorName: user.username,
+    category: category || 'announcement'
+  };
+
+  await db.saveNews(newsItem);
+  res.json({ ok: true, news: newsItem });
+}));
+
 // Build a snapshot of public servers to send via API or sockets
 function buildPublicServersSnapshot() {
   const servers = {};
@@ -1821,7 +1857,7 @@ io.on('connection', socket => {
               const publicServer = publicServers.get('cs16').get(roomId);
               if (publicServer) {
                 const newHost = room.players.get(room.hostId);
-                if (newHost) publicServer.hostName = newHost.username;
+                               if (newHost) publicServer.hostName = newHost.username;
               }
             }
             const publicServer = publicServers.get('cs16').get(roomId);
