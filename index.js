@@ -338,6 +338,9 @@ app.use((req, res, next) => {
 // CSRF protection básica (solo para POST)
 app.use((req, res, next) => {
   if (req.method === 'POST') {
+    // Exclude /api/news from this check as it uses session auth and doesn't have access to the secret
+    if (req.path.startsWith('/api/news')) return next();
+
     const csrf = req.headers['x-csrf-token'];
     if (!csrf || csrf !== process.env.SESSION_SECRET) {
       return res.status(403).json({ error: 'CSRF token inválido' });
